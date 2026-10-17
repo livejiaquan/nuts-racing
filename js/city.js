@@ -157,6 +157,7 @@ export function buildBuildings(scene, S) {
   const signs = SHOPS.map((t, i) => ({ tex: signTexture(t, SIGN_COLORS[i % SIGN_COLORS.length]), mats: [] }));
   const tankGeo = new THREE.CylinderGeometry(0.8, 0.8, 1.4, 10);
   const tanks = [];
+  const aoList = [];   // 每棟樓底下一塊暗角貼圖，讓房子「坐」在地上
   const color = new THREE.Color();
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
 
@@ -191,6 +192,7 @@ export function buildBuildings(scene, S) {
       const local = new THREE.Vector3(0, 2.6, -d / 2 - 0.08).applyQuaternion(q).add(new THREE.Vector3(cx, 0, cz));
       s.mats.push({ pos: local, q: q.clone(), sw, sh });
     }
+    aoList.push({ x: cx, z: cz, w: w + 3.2, d: d + 3.2, q: q.clone() });
     // 屋頂水塔
     if (Math.random() < 0.6) {
       const t = new THREE.Vector3((Math.random() - .5) * (w - 3), h + 0.7, (Math.random() - .5) * (d - 3)).applyQuaternion(q).add(new THREE.Vector3(cx, 0, cz));
@@ -232,6 +234,28 @@ export function buildBuildings(scene, S) {
       im.setMatrixAt(i, m4);
     });
     scene.add(im);
+  }
+  // 底部暗角
+  if (aoList.length) {
+    const aoTex = makeCanvasTexture(128, 128, (g, W, H) => {
+      g.clearRect(0, 0, W, H);
+      // 中心一塊實心，往外漸淡（方形版的柔影）
+      for (let k = 0; k < 10; k++) {
+        const inset = 10 + k * 4.5;
+        g.fillStyle = 'rgba(0,0,0,' + (0.045) + ')';
+        g.beginPath(); g.roundRect(inset, inset, W - inset * 2, H - inset * 2, 10); g.fill();
+      }
+    });
+    const aoGeo = new THREE.PlaneGeometry(1, 1);
+    const aoIm = new THREE.InstancedMesh(aoGeo, new THREE.MeshBasicMaterial({ map: aoTex, transparent: true, depthWrite: false, opacity: 0.9 }), aoList.length);
+    const flat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    aoList.forEach((a, i) => {
+      const qq = a.q.clone().multiply(flat);
+      m4.compose(new THREE.Vector3(a.x, 0.035, a.z), qq, new THREE.Vector3(a.w, a.d, 1));
+      aoIm.setMatrixAt(i, m4);
+    });
+    aoIm.renderOrder = 1;
+    scene.add(aoIm);
   }
   // 水塔
   if (tanks.length) {

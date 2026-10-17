@@ -19,6 +19,18 @@ const furLight = new THREE.MeshStandardMaterial({ color: 0xF2C994, roughness: 0.
 const scarf = new THREE.MeshStandardMaterial({ color: PALETTE.forest, roughness: 0.8 });
 const eye = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.3 });
 
+let _blob = null;
+export function blobTexture() {
+  if (_blob) return _blob;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 8, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(0,0,0,0.75)'); grad.addColorStop(0.55, 'rgba(0,0,0,0.35)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  _blob = new THREE.CanvasTexture(c);
+  return _blob;
+}
+
 function mesh(geo, mat, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
@@ -111,7 +123,13 @@ export function buildKart(colorHex) {
   for (const x of [-0.3, 0.3]) sq.add(mesh(new THREE.SphereGeometry(0.11, 8, 6), fur, x, 0.55, 0.55));
   g.add(sq);
 
-  return { group: g, wheels, front, squirrel: sq, tail, lightMat, brakeGlow };
+  // 車底柔影（接觸陰影）：讓車子貼在地上，不會像浮著
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 5.0), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, opacity: 0.6, depthWrite: false }));
+  blob.rotation.x = -Math.PI / 2; blob.position.y = 0.04; blob.renderOrder = 1;
+  g.add(blob);
+
+  return { group: g, wheels, front, squirrel: sq, tail, lightMat, brakeGlow, blob,
+    rearWheels: [new THREE.Vector3(-1.2, 0, -1.2), new THREE.Vector3(1.2, 0, -1.2)] };
 }
 
 // 輪子轉、前輪跟著方向、尾巴晃、車身依轉向傾斜
