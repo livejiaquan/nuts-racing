@@ -8,4 +8,4 @@
 
 細節看 `先看我_遊戲說明.md`。
 
-Three.js（MIT）、OpenStreetMap 左營路網資料（© OpenStreetMap contributors，ODbL）。
+Three.js（MIT）、OpenStreetMap 左營路網資料（© OpenStreetMap contributors，ODbL）、Kenney 的 City Kit 與 Car Kit 3D 模型（CC0，www.kenney.nl）。

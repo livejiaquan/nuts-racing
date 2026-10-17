@@ -4,6 +4,7 @@ import { makeCanvasTexture, PALETTE } from './world.js';
 import { ROADS } from './osm_data.js';
 import { ROAD_HALF, SAMPLES, makeNutMesh } from './track.js';
 import { excluded } from './zones.js';
+import { MODELS, instanceModel } from './models.js';
 
 const ROAD_W = { primary: 9, secondary: 8, tertiary: 6.5, residential: 5, unclassified: 4.5, living_street: 4, service: 2.6 };
 export const SIDEWALK = 3.2;
@@ -162,14 +163,51 @@ export function buildBuildings(scene, S) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
 
   let count = 0;
+  const COMM = ['building-a', 'building-b', 'building-c', 'building-d', 'building-e', 'building-f', 'building-g', 'building-h', 'building-i', 'building-j', 'building-k', 'building-l', 'building-m', 'building-n'];
+  const SKY = ['building-skyscraper-a', 'building-skyscraper-b', 'building-skyscraper-c', 'building-skyscraper-d', 'building-skyscraper-e'];
+  const HOUSE = ['building-type-a', 'building-type-b', 'building-type-c', 'building-type-d', 'building-type-e', 'building-type-f', 'building-type-g', 'building-type-h', 'building-type-i', 'building-type-j', 'building-type-k', 'building-type-l'];
+  const useModels = !!MODELS['building-a'];
+  const slots = {};   // 模型名 → 實例清單
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
   const tryPlace = (x, z, ang, nearTrack) => {
-    const w = 9 + Math.random() * 6, d = 9 + Math.random() * 7;
-    const floors = nearTrack ? 2 + Math.floor(Math.random() * 4) : 1 + Math.floor(Math.random() * 6);
-    const h = floors * 3.2;
-    // 中心往外推半個深度
     const cx = x, cz = z;
     if (occupied.has(cell(cx, cz))) return;
     if (excluded(cx, cz, 8)) return;
+    if (useModels) {
+      // 靠賽道：商業街屋；遠處：住宅與少量高樓
+      let name;
+      const r = Math.random();
+      if (nearTrack) name = pick(COMM);
+      else if (r < 0.12) name = pick(SKY);
+      else if (r < 0.55) name = pick(HOUSE);
+      else name = pick(COMM);
+      const m = MODELS[name]; if (!m) return;
+      const targetW = name.startsWith('building-skyscraper') ? 16 + Math.random() * 6 : (name.startsWith('building-type') ? 10 + Math.random() * 3 : 9 + Math.random() * 5);
+      const sc = targetW / Math.max(m.size.x, 0.01);
+      const w = m.size.x * sc, d = m.size.z * sc, h = m.size.y * sc;
+      if (distToRoads(cx, cz) < d / 2 + 0.5) return;
+      occupied.add(cell(cx, cz));
+      // Kenney 的店面在 +z，ang 原本讓 -z 朝馬路，所以轉半圈
+      const rotY = ang + Math.PI;
+      (slots[name] = slots[name] || []).push({ x: cx, z: cz, rotY, scale: sc });
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
+      if (nearTrack && Math.random() < 0.5) {
+        const sg = signs[Math.floor(Math.random() * signs.length)];
+        const local = new THREE.Vector3(0, Math.min(h - 1.2, 3.2), d / 2 + 0.12).applyQuaternion(q).add(new THREE.Vector3(cx, 0, cz));
+        sg.mats.push({ pos: local, q: q.clone(), sw: Math.min(w - 1, 7), sh: 1.8, flip: false });
+      }
+      aoList.push({ x: cx, z: cz, w: w + 3.2, d: d + 3.2, q: q.clone() });
+      if (!name.startsWith('building-type') && Math.random() < 0.5) {
+        const t = new THREE.Vector3((Math.random() - .5) * (w - 3), h + 0.7, (Math.random() - .5) * (d - 3)).applyQuaternion(q).add(new THREE.Vector3(cx, 0, cz));
+        tanks.push(t);
+      }
+      count++;
+      return;
+    }
+    const w = 9 + Math.random() * 6, d = 9 + Math.random() * 7;
+    const floors = nearTrack ? 2 + Math.floor(Math.random() * 4) : 1 + Math.floor(Math.random() * 6);
+    const h = floors * 3.2;
     if (distToRoads(cx, cz) < d / 2 + 0.5) return;
     occupied.add(cell(cx, cz));
     const geo = new THREE.BoxGeometry(w, h, d);
@@ -220,7 +258,8 @@ export function buildBuildings(scene, S) {
       }
     }
   }
-  scene.add(merger.build(wallMat));
+  if (useModels) { for (const name of Object.keys(slots)) instanceModel(scene, name, slots[name]); }
+  else scene.add(merger.build(wallMat));
 
   // 招牌（每種文字一個 InstancedMesh）
   const signGeo = new THREE.PlaneGeometry(1, 1);
@@ -229,7 +268,7 @@ export function buildBuildings(scene, S) {
     const im = new THREE.InstancedMesh(signGeo, new THREE.MeshLambertMaterial({ map: s.tex, side: THREE.DoubleSide }), s.mats.length);
     s.mats.forEach((p, i) => {
       // 平面預設朝 +z，要朝馬路（局部 -z）所以再轉 180 度
-      const qq = p.q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+      const qq = p.flip === false ? p.q.clone() : p.q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
       m4.compose(p.pos, qq, new THREE.Vector3(p.sw, p.sh, 1));
       im.setMatrixAt(i, m4);
     });
@@ -268,29 +307,101 @@ export function buildBuildings(scene, S) {
 
 // ---------- 路燈與行道樹（沿賽道人行道） ----------
 export function buildStreetFurniture(scene, S) {
+  const lampSpots = [];
+  for (let d = 12; d < S.length - 10; d += 26) { const i = S.d.findIndex(x => x >= d); if (i >= 0) lampSpots.push(i); }
+  const treeSpots = [];
+  for (let d = 25; d < S.length - 10; d += 26) { const i = S.d.findIndex(x => x >= d); if (i >= 0 && S.p[i].y < 1) treeSpots.push(i); }
+
+  if (MODELS['light-curved']) {
+    const lamps = [], trees = [], treesS = [];
+    for (const i of lampSpots) for (const side of [-1, 1]) {
+      const p = S.p[i], r = S.r[i];
+      const off = S.w[i] + 2.4;
+      // 燈臂（模型的 -z）要朝馬路
+      lamps.push({ x: p.x + r.x * off * side, y: p.y, z: p.z + r.z * off * side, rotY: Math.atan2(r.x * side, r.z * side), scale: 7 / MODELS['light-curved'].size.y });
+    }
+    for (const i of treeSpots) for (const side of [-1, 1]) {
+      if (!S.rail[i]) continue;
+      const p = S.p[i], r = S.r[i];
+      const off = S.w[i] + 2.6;
+      const big = Math.random() < 0.6;
+      (big ? trees : treesS).push({ x: p.x + r.x * off * side, y: p.y, z: p.z + r.z * off * side, rotY: Math.random() * 6.28, scale: (big ? 7.5 : 5.5) / MODELS[big ? 'tree-large' : 'tree-small'].size.y * (0.85 + Math.random() * 0.3) });
+    }
+    instanceModel(scene, 'light-curved', lamps);
+    instanceModel(scene, 'tree-large', trees);
+    instanceModel(scene, 'tree-small', treesS);
+    // 斑馬線口的紅綠燈
+    const tl = [];
+    let prev = S.name[0];
+    for (let i = 1; i < SAMPLES; i++) {
+      if (S.name[i] === prev) continue; prev = S.name[i];
+      const idx = Math.max(0, i - 32);
+      for (const side of [-1, 1]) {
+        const p = S.p[idx], r = S.r[idx];
+        const off = S.w[idx] + 1.6;
+        tl.push({ x: p.x + r.x * off * side, y: p.y, z: p.z + r.z * off * side, rotY: Math.atan2(r.x * side, r.z * side), scale: 5.2 / MODELS['traffic-light'].size.y });
+      }
+    }
+    instanceModel(scene, 'traffic-light', tl);
+    return;
+  }
+  // 沒模型時的陽春版
   const poleGeo = new THREE.CylinderGeometry(0.12, 0.16, 7, 8);
   const armGeo = new THREE.BoxGeometry(0.16, 0.16, 2.2);
   const headGeo = new THREE.BoxGeometry(0.5, 0.25, 0.9);
   const poleMat = new THREE.MeshLambertMaterial({ color: 0x6E7378 });
   const headMat = new THREE.MeshStandardMaterial({ color: 0xFFF2C2, emissive: 0xFFE9A8, emissiveIntensity: 0.6 });
-  const spots = [];
-  for (let d = 12; d < S.length - 10; d += 26) { const i = S.d.findIndex(x => x >= d); if (i >= 0) spots.push(i); }
-  const n = spots.length * 2;
+  const n = lampSpots.length * 2;
   const poles = new THREE.InstancedMesh(poleGeo, poleMat, n);
   const arms = new THREE.InstancedMesh(armGeo, poleMat, n);
   const heads = new THREE.InstancedMesh(headGeo, headMat, n);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
   let k = 0;
-  for (const i of spots) for (const side of [-1, 1]) {
+  for (const i of lampSpots) for (const side of [-1, 1]) {
     const p = S.p[i], r = S.r[i], t = S.t[i];
     const off = S.w[i] + 2.4;
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(t.x, t.z) + (side > 0 ? Math.PI / 2 : -Math.PI / 2));
-    v.set(p.x + r.x * off * side, 3.5, p.z + r.z * off * side); m4.compose(v, q, sc); poles.setMatrixAt(k, m4);
-    v.set(p.x + r.x * (off - 1.0 * 1) * side, 6.9, p.z + r.z * (off - 1.0) * side); m4.compose(v, q, sc); arms.setMatrixAt(k, m4);
-    v.set(p.x + r.x * (off - 2.0) * side, 6.85, p.z + r.z * (off - 2.0) * side); m4.compose(v, q, sc); heads.setMatrixAt(k, m4);
+    v.set(p.x + r.x * off * side, p.y + 3.5, p.z + r.z * off * side); m4.compose(v, q, sc); poles.setMatrixAt(k, m4);
+    v.set(p.x + r.x * (off - 1.0) * side, p.y + 6.9, p.z + r.z * (off - 1.0) * side); m4.compose(v, q, sc); arms.setMatrixAt(k, m4);
+    v.set(p.x + r.x * (off - 2.0) * side, p.y + 6.85, p.z + r.z * (off - 2.0) * side); m4.compose(v, q, sc); heads.setMatrixAt(k, m4);
     k++;
   }
   for (const im of [poles, arms, heads]) { im.castShadow = true; scene.add(im); }
+}
+
+// ---------- 背景馬路上停放的車（Kenney Car Kit） ----------
+export function buildParkedCars(scene, S) {
+  const CARS = ['sedan', 'taxi', 'van', 'suv', 'hatchback-sports', 'delivery', 'police', 'truck'];
+  if (!MODELS['sedan']) return;
+  const lists = {};
+  for (const s of allSegs) {
+    if (s[5]) continue;                       // 賽道不停車
+    const [ax, az, bx, bz, half] = s;
+    if (half < 6) continue;                   // 小巷不停
+    const len = Math.hypot(bx - ax, bz - az);
+    const tx = (bx - ax) / len, tz = (bz - az) / len, rx = -tz, rz = tx;
+    for (let d = 8; d < len - 6; d += 26) {
+      if (Math.random() > 0.55) continue;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const x = ax + tx * d + rx * side * (half - 3.4), z = az + tz * d + rz * side * (half - 3.4);
+      if (excluded(x, z, 2) || distToTrack(S, x, z) < 6) continue;
+      const name = CARS[Math.floor(Math.random() * CARS.length)];
+      (lists[name] = lists[name] || []).push({ x, y: 0, z, rotY: Math.atan2(tx, tz) + (side > 0 ? Math.PI : 0), scale: 4.4 / MODELS[name].size.z });
+    }
+  }
+  for (const name of Object.keys(lists)) instanceModel(scene, name, lists[name]);
+}
+
+// ---------- 公園樹（Kenney）----------
+export function buildParkTrees(scene, spots) {
+  if (!MODELS['tree-large']) return false;
+  const big = [], small = [];
+  for (const sp of spots) {
+    const b = Math.random() < 0.55;
+    (b ? big : small).push({ x: sp.x, y: sp.y, z: sp.z, rotY: Math.random() * 6.28, scale: (b ? 8 : 5.5) / MODELS[b ? 'tree-large' : 'tree-small'].size.y * (0.8 + Math.random() * 0.5) });
+  }
+  instanceModel(scene, 'tree-large', big); instanceModel(scene, 'tree-small', small);
+  return true;
 }
 
 // ---------- 地標 ----------
