@@ -543,7 +543,7 @@ function drawGauge() {
   const seg = (f0, f1, color) => { gctx.strokeStyle = color; gctx.beginPath(); gctx.arc(cx, cy, R, a0 + (a1 - a0) * f0, a0 + (a1 - a0) * f1); gctx.stroke(); };
   seg(0, 0.6, '#49A86B'); seg(0.6, 0.82, '#E8C21A'); seg(0.82, 1, '#D7262C');
   gctx.strokeStyle = 'rgba(253,246,227,.85)'; gctx.lineWidth = 2;
-  gctx.fillStyle = 'rgba(253,246,227,.8)'; gctx.font = '700 10px ui-monospace,monospace'; gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
+  gctx.fillStyle = 'rgba(253,246,227,.8)'; gctx.font = '10px "Russo One",ui-monospace,monospace'; gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
   for (let k = 0; k <= maxK; k += 10) {
     const a = a0 + (a1 - a0) * (k / maxK), major = k % 50 === 0;
     const r1 = R - 8, r2 = major ? R - 18 : R - 13;
@@ -557,8 +557,8 @@ function drawGauge() {
   gctx.fillStyle = '#FDF6E3'; gctx.beginPath(); gctx.arc(cx, cy, 5, 0, 7); gctx.fill();
   const gear = player.speed < 1 ? 'N' : Math.min(6, 1 + Math.floor(kmh / 28));
   gctx.fillStyle = 'rgba(253,246,227,.7)'; gctx.font = '700 9px sans-serif'; gctx.fillText('GEAR', cx - 30, cy + 2);
-  gctx.fillStyle = '#FDF6E3'; gctx.font = '900 18px ui-monospace,monospace'; gctx.fillText(String(gear), cx - 30, cy + 16);
-  gctx.font = '900 24px ui-monospace,monospace'; gctx.textAlign = 'right'; gctx.fillText(String(Math.round(kmh)), cx + 30, cy + 14);
+  gctx.fillStyle = '#FDF6E3'; gctx.font = '18px "Russo One",ui-monospace,monospace'; gctx.fillText(String(gear), cx - 30, cy + 16);
+  gctx.font = '26px "Russo One",ui-monospace,monospace'; gctx.textAlign = 'right'; gctx.fillText(String(Math.round(kmh)), cx + 30, cy + 14);
   gctx.font = '700 9px sans-serif'; gctx.fillStyle = 'rgba(253,246,227,.7)'; gctx.textAlign = 'left'; gctx.fillText('km/h', cx + 34, cy + 16); gctx.textAlign = 'center';
   const lamp = (x, on, color, text) => {
     gctx.fillStyle = on ? color : 'rgba(253,246,227,.12)';
@@ -614,7 +614,7 @@ function drawMinimap() {
 function updateHUD() {
   el.lap.textContent = Math.max(1, Math.min(player.lap, TOTAL_LAPS)) + ' / ' + TOTAL_LAPS;
   el.time.textContent = fmt(raceTime);
-  el.rank.textContent = '第 ' + computeRank() + ' 名';
+  el.rank.innerHTML = computeRank() + '<small>/' + (RIVAL_COUNT + 1) + '</small>';
   el.nuts.textContent = player.nuts;
   el.street.textContent = S.name[player.hint] || '';
   el.boost.classList.toggle('show', player.boost > 0);
@@ -683,7 +683,7 @@ function finishRace() {
   rows.sort((a, b) => (a.time && b.time) ? a.time - b.time : (a.time ? -1 : b.time ? 1 : b.prog - a.prog));
   const best = Math.min(...player.laps);
   el.resultBody.innerHTML =
-    '<div class="big">第 <span>' + rank + '</span> 名</div>' +
+    '<div class="big"><span>' + rank + '</span>第 ' + rank + ' 名</div>' +
     '<div class="total">總時間 ' + fmt(player.finishTime) + '</div>' +
     '<div class="sub">最快單圈 ' + fmt(best) + '　吃到核果 ' + player.nuts + ' 顆</div>' +
     '<table>' + rows.map((r, i) => '<tr class="' + (r.me ? 'me' : '') + '" style="animation-delay:' + (i * 0.12) + 's"><td>' + (i + 1) + '</td><td><i style="background:' + r.color + '"></i>' + r.name + '</td><td>' + (r.time ? fmt(r.time) : '還在跑') + '</td></tr>').join('') + '</table>' +
