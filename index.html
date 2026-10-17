@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>核果賽車</title>
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js" } }
+</script>
+<style>
+  :root { --cream:#FDF6E3; --forest:#1E5631; --forest-dark:#143D22; --orange:#E8743B; --ink:#23301F; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#143D22; color:var(--cream);
+    font-family:"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif; user-select:none; }
+  #cv { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  .hide { display:none !important; }
+
+  /* 載入 */
+  #loading { position:fixed; inset:0; background:var(--forest-dark); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; z-index:50; font-size:18px; }
+  #loading i { width:46px; height:46px; border:5px solid rgba(253,246,227,.25); border-top-color:var(--orange); border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* 標題畫面 */
+  #title { position:fixed; inset:0; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; padding:0 7vw; z-index:10;
+    background:linear-gradient(90deg, rgba(20,61,34,.88) 0%, rgba(20,61,34,.55) 45%, rgba(20,61,34,0) 75%); }
+  #title h1 { margin:0; font-size:clamp(56px, 9vw, 120px); line-height:1; letter-spacing:6px; color:var(--cream);
+    text-shadow:0 6px 0 var(--forest-dark), 0 0 40px rgba(232,116,59,.45); }
+  #title h1 span { color:var(--orange); }
+  #title .tag { font-size:clamp(14px, 1.6vw, 20px); letter-spacing:4px; opacity:.9; margin:8px 0 28px; }
+  #title .tag b { color:var(--orange); }
+  .menu { display:flex; flex-direction:column; gap:12px; }
+  .btn { cursor:pointer; border:0; border-radius:10px; font-family:inherit; font-weight:700; font-size:18px; padding:12px 26px;
+    background:var(--orange); color:#fff; box-shadow:0 5px 0 #B9542A; transition:transform .08s; }
+  .btn:active { transform:translateY(3px); box-shadow:0 2px 0 #B9542A; }
+  .btn.big { font-size:26px; padding:16px 44px; letter-spacing:4px; }
+  .btn.ghost { background:rgba(253,246,227,.1); color:var(--cream); box-shadow:inset 0 0 0 2px rgba(253,246,227,.6); font-weight:500; font-size:15px; padding:9px 18px; }
+  .btn:disabled { opacity:.4; cursor:default; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  #swatches { display:flex; gap:8px; }
+  .swatch { width:34px; height:34px; border-radius:50%; border:3px solid rgba(253,246,227,.35); cursor:pointer; padding:0; }
+  .swatch.on { border-color:var(--cream); transform:scale(1.15); box-shadow:0 0 0 3px var(--forest-dark); }
+  #color-name { font-size:15px; opacity:.9; min-width:64px; }
+  .keys { margin-top:26px; font-size:14px; opacity:.85; line-height:2; }
+  #hex-link { color:var(--orange); font-weight:700; }
+  kbd { background:var(--cream); color:var(--ink); border-radius:5px; padding:1px 8px; font-family:inherit; font-size:13px; font-weight:700; box-shadow:0 2px 0 #b9b19c; }
+  #brand { position:fixed; left:7vw; bottom:22px; font-size:13px; letter-spacing:2px; opacity:.6; z-index:11; }
+
+  /* HUD */
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:5; }
+  .card { position:absolute; background:rgba(20,61,34,.78); border:2px solid rgba(253,246,227,.85); border-radius:12px; padding:10px 14px; backdrop-filter:blur(4px); }
+  #hud-left { left:18px; top:18px; min-width:190px; font-size:15px; line-height:1.9; }
+  #hud-left b { color:var(--orange); font-size:22px; margin-left:8px; font-family:ui-monospace,monospace; }
+  #hud-left .t { font-family:ui-monospace,monospace; font-size:20px; margin-left:8px; }
+  #hud-left .street { border-top:1px solid rgba(253,246,227,.35); margin-top:4px; padding-top:4px; }
+  #hud-left .street span { color:var(--orange); font-weight:700; font-size:19px; }
+  #hud-speed { right:18px; bottom:18px; width:214px; height:196px; padding:6px; text-align:center; }
+  #gauge { width:200px; height:180px; display:block; }
+  #speed-num { position:absolute; left:0; right:0; bottom:24px; font-family:ui-monospace,monospace; font-size:26px; font-weight:700; color:var(--cream); pointer-events:none; }
+  #speed-num small { font-size:12px; opacity:.8; }
+  #hud-map { left:18px; bottom:18px; padding:6px; }
+  #minimap { width:220px; height:200px; display:block; }
+  #hud-nutcard { right:18px; top:18px; font-size:20px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  #hud-nutcard i { width:22px; height:26px; background:radial-gradient(circle at 40% 35%, #D98A41, #8A4A12); border-radius:50% 50% 50% 50% / 40% 40% 60% 60%; display:inline-block; }
+  #countdown { position:absolute; left:0; right:0; top:28%; text-align:center; font-size:160px; font-weight:900; color:var(--cream);
+    text-shadow:0 8px 0 var(--forest-dark), 0 0 50px rgba(232,116,59,.6); transition:transform .12s; }
+  #countdown.pop { transform:scale(1.25); }
+  #toast { position:absolute; left:50%; top:16%; transform:translateX(-50%) scale(.9); background:var(--orange); color:#fff; font-weight:700;
+    padding:9px 22px; border-radius:24px; font-size:20px; opacity:0; transition:all .18s; box-shadow:0 4px 0 #B9542A; }
+  #toast.show { opacity:1; transform:translateX(-50%) scale(1); }
+  #boost-tag { position:absolute; left:50%; bottom:22%; transform:translateX(-50%); font-size:34px; font-weight:900; color:#FFD36E; letter-spacing:6px;
+    text-shadow:0 0 18px #FF9A3C, 0 4px 0 #B9542A; opacity:0; transition:opacity .15s; }
+  #boost-tag.show { opacity:1; animation:pulse .35s infinite alternate; }
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index:4; opacity:0; transition:opacity .2s;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(255,160,60,.35) 100%); }
+  #vignette.show { opacity:1; }
+  @keyframes pulse { to { transform:translateX(-50%) scale(1.08); } }
+
+  /* micro:bit 面板 */
+  #mb-panel { position:fixed; right:18px; top:74px; width:236px; z-index:12; background:rgba(20,61,34,.9); border:2px solid var(--cream); border-radius:12px; padding:10px 12px; font-size:13px; line-height:1.5; transition:opacity .3s; }
+  #mb-panel.dim { opacity:.18; } #mb-panel.dim:hover { opacity:1; }
+  #mb-panel h3 { margin:0 0 4px; font-size:14px; color:var(--orange); cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  #mb-toggle { font-size:12px; color:var(--cream); opacity:.7; font-weight:400; }
+  #mb-panel.collapsed { width:auto; padding:6px 10px; }
+  #mb-panel.collapsed #mb-body { display:none; }
+  #mb-panel.collapsed h3 { margin:0; gap:10px; }
+  @media (max-width: 980px) { #mb-panel { width:200px; font-size:12px; } }
+  #mb-panel .btn { font-size:13px; padding:6px 10px; box-shadow:0 3px 0 #B9542A; }
+  #tiltbar { position:relative; height:10px; margin-top:8px; background:rgba(253,246,227,.18); border-radius:5px; }
+  #tiltbar i { position:absolute; top:-3px; width:4px; height:16px; background:var(--orange); border-radius:2px; left:50%; transform:translateX(-50%); }
+  #tiltbar::after { content:''; position:absolute; left:50%; top:-2px; width:1px; height:14px; background:rgba(253,246,227,.5); }
+  #mb-hint { font-size:12px; opacity:.8; margin-top:6px; }
+  #btn-quality { position:fixed; right:18px; top:18px; z-index:12; }
+  #title.hide ~ #btn-quality { top:auto; bottom:232px; }
+  #btn-mute { position:fixed; right:120px; top:18px; z-index:12; }
+  #title.hide ~ #btn-mute { top:auto; bottom:232px; right:120px; }
+  #player-name { font:inherit; font-size:15px; padding:6px 10px; border-radius:8px; border:2px solid rgba(253,246,227,.5); background:rgba(253,246,227,.12); color:var(--cream); width:260px; }
+  #player-name::placeholder { color:rgba(253,246,227,.55); }
+  #board-wrap { margin-top:18px; background:rgba(20,61,34,.6); border:1.5px solid rgba(253,246,227,.5); border-radius:10px; padding:8px 12px; min-width:300px; }
+  .board-head { font-size:13px; letter-spacing:1px; opacity:.9; display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+  #board-title table, #board-result table { border-collapse:collapse; font-size:14px; }
+  #board-title td, #board-result td { padding:2px 10px 2px 0; }
+  #board-title tr.me td, #board-result tr.me td { color:var(--orange); font-weight:700; }
+  .tiny { font-size:12px; opacity:.75; }
+  #result .newbest { color:#FFD36E; font-weight:900; font-size:20px; margin-top:6px; text-shadow:0 0 12px rgba(255,180,60,.6); }
+  #board-result { margin-top:10px; border-top:1px solid rgba(253,246,227,.3); padding-top:8px; }
+  #board-result table { margin:0 auto; }
+
+  /* 結算 */
+  #result { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:10; background:rgba(20,61,34,.55); }
+  #result .panel { background:rgba(20,61,34,.94); border:3px solid var(--cream); border-radius:18px; padding:26px 34px; text-align:center; min-width:380px; max-width:92vw; }
+  #result h2 { margin:0 0 6px; font-size:30px; letter-spacing:4px; }
+  #result .big { font-size:28px; margin:4px 0; }
+  #result .big span { color:var(--orange); font-size:60px; font-weight:900; }
+  #result .total { font-size:24px; color:var(--orange); font-weight:700; }
+  #result .sub { font-size:15px; opacity:.9; margin:4px 0 12px; }
+  #result table { margin:0 auto 10px; border-collapse:collapse; font-size:16px; }
+  #result td { padding:4px 14px; text-align:left; }
+  #result tr.me td { color:var(--orange); font-weight:700; }
+  #result td i { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:8px; vertical-align:-1px; }
+  #result .laps { font-size:13px; opacity:.8; }
+  #result .tip { font-size:13px; opacity:.75; margin-top:8px; }
+  #result .row { justify-content:center; margin-top:16px; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="loading"><i></i><div>核果賽車 載入中…</div></div>
+
+<div id="title">
+  <h1>核果<span>賽車</span></h1>
+  <div class="tag">核果資訊學苑高雄校 ｜ <b>micro:bit</b> 自走車班 ｜ 高雄濃縮賽道：85 大樓・愛河大橋・高雄港・駁二・巨蛋・美麗島</div>
+  <div class="menu">
+    <button class="btn big" id="btn-start">開始比賽</button>
+    <div class="row"><span style="font-size:14px;opacity:.85">車身顏色</span><div id="swatches"></div><span id="color-name"></span></div>
+    <div class="row"><span style="font-size:14px;opacity:.85">你的名字</span><input id="player-name" maxlength="12" placeholder="輸入名字（計時會記在排行榜）"></div>
+  </div>
+  <div id="board-wrap">
+    <div class="board-head">這台電腦的最佳時間 <button class="btn ghost" id="btn-clear-board" style="font-size:12px;padding:3px 8px">清空</button></div>
+    <div id="board-title"></div>
+  </div>
+  <div class="keys">
+    鍵盤：<kbd>↑</kbd> 油門　<kbd>↓</kbd> 煞車　<kbd>←</kbd><kbd>→</kbd> 轉彎　<kbd>Enter</kbd> 開始<br>
+    micro:bit：左右傾斜轉彎　<kbd>B</kbd> 油門（右手）　<kbd>A</kbd> 煞車（左手）　<a id="hex-link" href="microbit程式/方向盤.hex" download="核果賽車_方向盤.hex">下載 micro:bit 程式 (.hex)</a><br>
+    吃到<b style="color:var(--orange)">核果</b>會加速、踩到綠色加速板衝更快、撞到三角錐會打滑。跑完 2 圈，比誰最快。
+  </div>
+</div>
+<div id="brand">核果資訊學苑</div>
+
+<button class="btn ghost" id="btn-quality">畫質：高</button>
+<button class="btn ghost" id="btn-mute">音效：開</button>
+
+<div id="mb-panel">
+  <h3 id="mb-head">micro:bit 方向盤 <span id="mb-toggle">收起</span></h3>
+  <div id="mb-body">
+  <div id="mb-state">未連線（用鍵盤開車）</div>
+  <div class="row" style="margin-top:6px"><button class="btn" id="mb-connect">連接 micro:bit</button><button class="btn ghost" id="mb-bridge" title="先執行 microbit_bridge.py">用橋接程式連</button></div>
+  <div class="row" style="margin-top:6px"><button class="btn ghost" id="mb-zero">校正置中</button><button class="btn ghost" id="mb-baud">115200</button></div>
+  <div id="tiltbar"><i id="tilt-needle"></i></div>
+  <div id="mb-hint">傾斜轉彎，B 油門、A 煞車。「連接」要 Chrome／Edge；「橋接」先跑 橋接程式.py，任何瀏覽器都行。</div>
+  </div>
+</div>
+
+<div id="vignette"></div>
+<div id="hud" class="hide">
+  <div class="card" id="hud-left">
+    <div>圈數<b id="hud-lap">1 / 2</b></div>
+    <div>時間<span class="t" id="hud-time">0.00</span></div>
+    <div>名次<span class="t" id="hud-rank">第 5 名</span></div>
+    <div class="street">你在　<span id="hud-street">核果大道</span></div>
+  </div>
+  <div class="card" id="hud-nutcard"><i></i><span id="hud-nuts">0</span></div>
+  <div class="card" id="hud-map"><canvas id="minimap" width="220" height="200"></canvas></div>
+  <div class="card" id="hud-speed"><canvas id="gauge" width="200" height="180"></canvas></div>
+  <div id="countdown"></div>
+  <div id="toast"></div>
+  <div id="boost-tag">加速中</div>
+</div>
+
+<div id="result" class="hide">
+  <div class="panel">
+    <h2>完賽！</h2>
+    <div id="result-body"></div>
+    <div class="board-head" style="justify-content:center;margin-top:8px">這台電腦的最佳時間</div>
+    <div id="board-result"></div>
+    <div class="row"><button class="btn" id="btn-again">再跑一次</button><button class="btn ghost" id="btn-title">回到標題</button></div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
