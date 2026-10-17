@@ -129,7 +129,8 @@ class H(BaseHTTPRequestHandler):
         from urllib.parse import unquote
         rel = unquote(path.split("?")[0]).lstrip("/") or "index.html"
         full = os.path.normpath(os.path.join(GAME_DIR, rel))
-        if not full.startswith(GAME_DIR) or not os.path.isfile(full):
+        inside = os.path.commonpath([GAME_DIR, full]) == GAME_DIR   # 只准遊戲資料夾裡面的檔案（startswith 會放過同前綴的隔壁資料夾）
+        if not inside or not os.path.isfile(full):
             self.send_response(404); self._cors(); self.end_headers(); return
         ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
         if full.endswith(".js"): ctype = "text/javascript"
@@ -148,13 +149,21 @@ class H(BaseHTTPRequestHandler):
             self._cors()
             self.end_headers()
             last = -1
+            last_write = time.time()
             try:
                 while True:
                     dbg["sse_iter"] += 1
                     if latest["count"] != last:
                         last = latest["count"]
                         self.wfile.write(f"data: {latest['line']}\n\n".encode())
+                        self.wfile.flush()
                         dbg["sse_sent"] += 1
+                        last_write = time.time()
+                    elif time.time() - last_write > 1.0:
+                        # 板子沒資料時也要定期寫一點東西，瀏覽器關掉才會從這裡的 BrokenPipe 察覺、結束這條執行緒
+                        self.wfile.write(b": ping\n\n")
+                        self.wfile.flush()
+                        last_write = time.time()
                     time.sleep(0.01)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 return

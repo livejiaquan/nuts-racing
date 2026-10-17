@@ -258,6 +258,17 @@ export function buildBuildings(scene, S) {
       }
     }
   }
+  // 賽道兩旁的商店街：allSegs 裡的賽道段只有 8 公尺長，上面的迴圈擺不進房子，所以沿賽道另外走一遍
+  for (let d = 30; d < S.length - 20; d += 15 + Math.random() * 4) {
+    const i = S.d.findIndex(x => x >= d);
+    if (i < 0 || S.p[i].y > 1) continue;                  // 高架段下面不蓋
+    const p = S.p[i], r = S.r[i];
+    for (const side of [-1, 1]) {
+      if (side === 1 && d < 60) continue;                  // 起點右邊是核果資訊學苑
+      const off = S.w[i] + SIDEWALK + 2.5 + 6;             // 讓出人行道、路燈和彎道指示牌，房子深度約 12
+      tryPlace(p.x + r.x * off * side, p.z + r.z * off * side, Math.atan2(r.x * side, r.z * side), true);
+    }
+  }
   if (useModels) { for (const name of Object.keys(slots)) instanceModel(scene, name, slots[name]); }
   else scene.add(merger.build(wallMat));
 
@@ -320,7 +331,8 @@ export function buildStreetFurniture(scene, S) {
       // 燈臂（模型的 -z）要朝馬路
       lamps.push({ x: p.x + r.x * off * side, y: p.y, z: p.z + r.z * off * side, rotY: Math.atan2(r.x * side, r.z * side), scale: 7 / MODELS['light-curved'].size.y });
     }
-    for (const i of treeSpots) for (const side of [-1, 1]) {
+    // 每個模型都可能單獨載不到（網路不穩），用到前都要再確認一次
+    if (MODELS['tree-large'] && MODELS['tree-small']) for (const i of treeSpots) for (const side of [-1, 1]) {
       if (!S.rail[i]) continue;
       const p = S.p[i], r = S.r[i];
       const off = S.w[i] + 2.6;
@@ -333,7 +345,7 @@ export function buildStreetFurniture(scene, S) {
     // 斑馬線口的紅綠燈
     const tl = [];
     let prev = S.name[0];
-    for (let i = 1; i < SAMPLES; i++) {
+    if (MODELS['traffic-light']) for (let i = 1; i < SAMPLES; i++) {
       if (S.name[i] === prev) continue; prev = S.name[i];
       const idx = Math.max(0, i - 32);
       for (const side of [-1, 1]) {
@@ -371,8 +383,8 @@ export function buildStreetFurniture(scene, S) {
 
 // ---------- 背景馬路上停放的車（Kenney Car Kit） ----------
 export function buildParkedCars(scene, S) {
-  const CARS = ['sedan', 'taxi', 'van', 'suv', 'hatchback-sports', 'delivery', 'police', 'truck'];
-  if (!MODELS['sedan']) return;
+  const CARS = ['sedan', 'taxi', 'van', 'suv', 'hatchback-sports', 'delivery', 'police', 'truck'].filter(n => MODELS[n]);   // 載不到的車款就不擺
+  if (!CARS.length) return;
   const lists = {};
   for (const s of allSegs) {
     if (s[5]) continue;                       // 賽道不停車
@@ -394,7 +406,7 @@ export function buildParkedCars(scene, S) {
 
 // ---------- 公園樹（Kenney）----------
 export function buildParkTrees(scene, spots) {
-  if (!MODELS['tree-large']) return false;
+  if (!MODELS['tree-large'] || !MODELS['tree-small']) return false;
   const big = [], small = [];
   for (const sp of spots) {
     const b = Math.random() < 0.55;

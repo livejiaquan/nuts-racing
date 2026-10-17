@@ -94,6 +94,8 @@ export function bgmStart() {
     const tick = () => {
       const race = bgm.mode === 'race';
       const bpm = race ? 150 : 96, beat = 60 / bpm, sub = beat / 2;
+      // 分頁切到背景時 setTimeout 會被放慢，回來不要把漏掉的音一次全放，直接接到現在
+      if (bgm.next < ac.currentTime - 0.3) bgm.next = ac.currentTime + 0.05;
       while (bgm.next < ac.currentTime + 0.4) {
         const s = bgm.step, t = bgm.next;
         const bar = Math.floor(s / 8) % 4;

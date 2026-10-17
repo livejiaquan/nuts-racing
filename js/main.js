@@ -61,7 +61,7 @@ function makeRacer(colorHex) {
   scene.add(k.group);
   return {
     kart: k, pos: new THREE.Vector3(), vel: new THREE.Vector3(), heading: 0, speed: 0, prevSpeed: 0,
-    steer: 0, hint: 0, lap: 1, prevIndex: 0, boost: 0, spin: 0, offroad: false,
+    steer: 0, hint: 0, lap: 1, lapMax: 1, prog: 0, prevIndex: 0, boost: 0, spin: 0, offroad: false,
     nuts: 0, finishTime: 0, laps: [], lapStart: 0,
     drift: 0, driftCharge: 0, pitch: 0, susp: 0, suspVel: 0, visYaw: 0
   };
@@ -81,7 +81,9 @@ function placeOnTrack(racer, index, lat, back = 0) {
   racer.heading = Math.atan2(t.x, t.z);
   racer.vel.set(0, 0, 0); racer.speed = 0; racer.prevSpeed = 0;
   racer.hint = nearest(S, racer.pos, -1).index; racer.prevIndex = racer.hint;
-  racer.lap = back > 0 ? 0 : 1; racer.boost = 0; racer.falling = false; racer.airborne = false; racer.vy = 0; racer.spin = 0; racer.nuts = 0; racer.finishTime = 0; racer.laps = []; racer.lapStart = 0;
+  // prog 是從起跑線算起、連續累計的取樣數（可負）；起跑線後面出發就是負的，過線一次等於一圈
+  racer.lap = back > 0 ? 0 : 1; racer.lapMax = racer.lap; racer.prog = back > 0 ? racer.hint - SAMPLES : racer.hint;
+  racer.boost = 0; racer.falling = false; racer.airborne = false; racer.vy = 0; racer.spin = 0; racer.nuts = 0; racer.finishTime = 0; racer.laps = []; racer.lapStart = 0;
   racer.drift = 0; racer.driftCharge = 0; racer.pitch = 0; racer.susp = 0; racer.suspVel = 0; racer.visYaw = 0;
   racer.kart.group.position.copy(racer.pos);
   racer.kart.group.rotation.set(0, racer.heading, 0);
@@ -105,11 +107,13 @@ function resetRace() {
 // ---------- 輸入 ----------
 const keys = { left: false, right: false, up: false, down: false };
 const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'up', w: 'up', W: 'up', ArrowDown: 'down', s: 'down', S: 'down' };
+function typing(e) { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'); }   // 在名字欄打字時不要搶走 a/d/w/s
 window.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (gameState === 'title' || gameState === 'done') && !tutorialOpen()) { requestStart(); return; }
+  if (typing(e)) return;
   const k = KEYMAP[e.key]; if (k) { keys[k] = true; e.preventDefault(); }
-  if (e.key === 'Enter' && (gameState === 'title' || gameState === 'done') && !tutorialOpen()) requestStart();
 });
-window.addEventListener('keyup', e => { const k = KEYMAP[e.key]; if (k) keys[k] = false; });
+window.addEventListener('keyup', e => { if (typing(e)) return; const k = KEYMAP[e.key]; if (k) keys[k] = false; });
 
 // ---------- 粒子 ----------
 let _softDot = null;
@@ -272,10 +276,13 @@ function updatePlayer(dt) {
     else p.pos.y += dy * Math.min(1, dt * 14);
   }
 
-  // ----- 圈數 -----
-  if (p.prevIndex > SAMPLES * 0.85 && n.index < SAMPLES * 0.15) onLap(p);
-  else if (p.prevIndex < SAMPLES * 0.15 && n.index > SAMPLES * 0.85) p.lap = Math.max(0, p.lap - 1);
-  p.prevIndex = n.index;
+  // ----- 圈數：累計前進量，倒車回頭再過線不會多算一圈，也不會多記一筆圈速 -----
+  let di = n.index - p.prevIndex;
+  if (di > SAMPLES / 2) di -= SAMPLES; else if (di < -SAMPLES / 2) di += SAMPLES;
+  p.prog += di; p.prevIndex = n.index;
+  const lapIdx = Math.floor(p.prog / SAMPLES) + 1;   // 0 = 還沒過起跑線，1 = 第一圈…
+  if (lapIdx > p.lapMax) onLap(p, lapIdx);
+  else p.lap = Math.max(0, lapIdx);
 
   // ----- 道具 -----
   for (const nut of items.nuts) {
@@ -372,16 +379,18 @@ function respawn(p, index) {
   const sp = S.p[i], t = S.t[i];
   p.pos.set(sp.x, sp.y, sp.z); p.vel.set(0, 0, 0); p.speed = 0; p.vy = 0;
   p.heading = Math.atan2(t.x, t.z); p.falling = false; p.airborne = false; p.boost = 0; p.spin = 0; p.drift = 0;
-  p.hint = i; p.prevIndex = i;
+  p.hint = i; p.prevIndex = i; p.prog -= (index - i + SAMPLES) % SAMPLES;   // 往回放 20 格，累計進度也要退
   forwardOf(p.heading, tmpF);
   camera.position.copy(p.pos).addScaledVector(tmpF, -9).addScaledVector(UP, 4.2);
   toast('回到賽道');
 }
 
-function onLap(p) {
-  if (p.lap === 0) { p.lap = 1; p.lapStart = raceTime; return; }
+function onLap(p, lapIdx) {
+  // 只有第一次進到新的一圈才會呼叫（lapIdx > lapMax）
+  p.lap = lapIdx; p.lapMax = lapIdx;
+  if (lapIdx === 1) { p.lapStart = raceTime; return; }
   const t = raceTime - p.lapStart;
-  p.laps.push(t); p.lapStart = raceTime; p.lap++;
+  p.laps.push(t); p.lapStart = raceTime;
   if (p.lap > TOTAL_LAPS) { finishRace(); return; }
   SFX.lap();
   if (prevLapTime > 0) {
@@ -430,7 +439,7 @@ function updateRivals(dt) {
   }
 }
 
-function progressOf(p) { return p.lap * SAMPLES + (p === player ? p.hint : p.u * SAMPLES); }
+function progressOf(p) { return p === player ? p.prog + SAMPLES : p.lap * SAMPLES + p.u * SAMPLES; }   // 兩邊同一個尺：對手從第 1 圈的起跑線算
 function computeRank() {
   const mine = progressOf(player);
   let rank = 1;
@@ -811,6 +820,17 @@ const KENNEY = (() => {
 })();
 
 async function boot() {
+  try { await bootStages(); }
+  catch (err) {
+    // 任何一步失敗都要讓學生看得到，不要卡在進度條
+    console.error(err);
+    if (loadEl.bar) loadEl.bar.style.background = '#D7262C';
+    if (loadEl.pct) loadEl.pct.textContent = '載入失敗：' + (err && err.message ? err.message : err);
+    if (loadEl.tip) loadEl.tip.textContent = '請重新整理頁面再試一次（Shift 加重新整理）。還是不行就換 Chrome 或 Edge。';
+  }
+}
+
+async function bootStages() {
   await stage(3, '載入模型（Kenney，CC0）', null);
   await loadModels(KENNEY, (f) => { if (loadEl.bar) loadEl.bar.style.width = (3 + f * 30) + '%'; });
   await stage(34, '天空與光線', () => { addSky(scene); clouds = addClouds(scene, 22); lights = addLights(scene); addGround(scene); addMountains(scene); });
