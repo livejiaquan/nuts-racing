@@ -16,8 +16,8 @@ export const MB = {
 // 橋接模式：讀本機 microbit_bridge.py 送出的 SSE 串流，不需要瀏覽器的裝置選擇視窗
 export async function connectBridge(url = 'http://127.0.0.1:9413/tilt') {
   if (MB.connected) { await disconnect(); return; }
-  const r = await fetch(url.replace('/tilt', '/'), { cache: 'no-store' }).catch(() => null);
-  if (!r || !r.ok) throw new Error('找不到橋接程式，先執行 python3 microbit_bridge.py');
+  const r = await fetch(url.replace('/tilt', '/status'), { cache: 'no-store' }).catch(() => null);
+  if (!r || !r.ok) throw new Error(location.protocol === 'https:' ? '連不到本機橋接程式：確認 橋接程式.py 有在跑，Chrome 跳「允許存取本機網路」要按允許；不行就改用「連接 micro:bit」' : '找不到橋接程式，先執行 python3 橋接程式.py');
   const info = await r.json();
   if (info.error) throw new Error('橋接程式讀不到 micro:bit：' + info.error);
   MB.es = new EventSource(url);

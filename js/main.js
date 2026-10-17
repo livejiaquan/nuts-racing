@@ -666,8 +666,7 @@ document.getElementById('btn-title').addEventListener('click', backToTitle);
 // 線上版（https 的網址）不能連本機橋接程式，把那顆鈕藏起來
 const ONLINE = location.protocol === 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 if (ONLINE) {
-  document.getElementById('mb-bridge').classList.add('hide');
-  document.getElementById('mb-hint').textContent = '傾斜轉彎，B 油門、A 煞車。用 Chrome 或 Edge 按「連接 micro:bit」，選 mbed Serial Port。板子要先燒好程式（標題畫面有下載）。';
+  document.getElementById('mb-hint').textContent = '傾斜轉彎，B 油門、A 煞車。Chrome／Edge 按「連接 micro:bit」選 mbed Serial Port（最簡單）。電腦有跑橋接程式的話也可以按「用橋接程式連」。板子要先燒好程式（標題畫面有下載）。';
 }
 
 // micro:bit 面板收合：視窗窄的時候預設收起，免得蓋住開始鈕

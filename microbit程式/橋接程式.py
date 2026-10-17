@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""核果賽車 — micro:bit 橋接程式
+"""核果賽車 — micro:bit 橋接程式（同時也是本機遊戲伺服器）
 
-把 micro:bit 的序列埠資料轉成瀏覽器可以直接收的串流（Server-Sent Events），
-遊戲按「用橋接程式連」就能收到，不用瀏覽器跳裝置選擇視窗，Safari／Firefox 也能用。
+做兩件事：
+1. 把 micro:bit 的序列埠資料轉成瀏覽器可以直接收的串流（Server-Sent Events）。
+2. 把上一層的遊戲資料夾當網站伺服，所以一個指令就能在本機玩：
+       pip install pyserial
+       python3 橋接程式.py                 # 自動找 /dev/cu.usbmodem* 或 COMx
+   然後用任何瀏覽器開 http://127.0.0.1:9413 ，按「用橋接程式連」。不用跳裝置選擇視窗，Safari／Firefox 也行。
 
-用法：
-    pip install pyserial
-    python3 microbit_bridge.py            # 自動找 /dev/cu.usbmodem* 或 COMx
-    python3 microbit_bridge.py /dev/cu.usbmodem1202 115200
+   指定序列埠與速率：python3 橋接程式.py /dev/cu.usbmodem1202 9600
 
-開著不要關，遊戲那邊按「用橋接程式連」。Ctrl+C 結束。
+線上版（https 網址）也可以按「用橋接程式連」接這支程式，但 Chrome 會先問「允許存取本機網路」，要按允許；
+其他瀏覽器可能直接擋掉，擋掉就改用「連接 micro:bit」或開 http://127.0.0.1:9413 玩本機版。
+
+開著不要關，Ctrl+C 結束。
 """
-import sys, glob, threading, time, json
+import sys, glob, threading, time, json, os, mimetypes
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+GAME_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # 上一層 = 遊戲資料夾
 
 try:
     import serial
@@ -36,13 +42,28 @@ def valid(line):
 
 
 def find_port():
-    cands = glob.glob("/dev/cu.usbmodem*") + glob.glob("/dev/ttyACM*") + [f"COM{i}" for i in range(3, 20)]
+    """找 micro:bit 的序列埠；沒接就回 None（之後每 3 秒再找一次）"""
+    cands = glob.glob("/dev/cu.usbmodem*") + glob.glob("/dev/ttyACM*")
+    if sys.platform == "win32":
+        try:
+            from serial.tools import list_ports
+            cands += [p.device for p in list_ports.comports() if "mbed" in (p.description or "").lower() or "micro:bit" in (p.description or "").lower() or "usb serial" in (p.description or "").lower()]
+        except Exception:
+            pass
     return cands[0] if cands else None
 
 
 def reader(port, baud):
+    auto = port is None
     while True:
         try:
+            if auto:
+                port = find_port()
+                if not port:
+                    latest["error"] = "找不到 micro:bit，確認 USB 線接好（會自動再找）"
+                    latest["port"] = None
+                    time.sleep(3)
+                    continue
             s = serial.Serial(port, baud, timeout=1)
             latest["port"] = port; latest["error"] = None
             print(f"[bridge] 已連 {port} @ {baud}")
@@ -60,6 +81,7 @@ def reader(port, baud):
                     latest["bad"] += 1
         except Exception as e:
             latest["error"] = str(e)
+            latest["port"] = None
             print(f"[bridge] 序列埠錯誤：{e}，3 秒後重試")
             time.sleep(3)
 
@@ -70,7 +92,32 @@ class H(BaseHTTPRequestHandler):
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Private-Network", "true")   # Chrome：https 頁面存取本機網路要這個
         self.send_header("Cache-Control", "no-cache")
+
+    def do_OPTIONS(self):   # Chrome 的本機網路預檢
+        self.send_response(204)
+        self._cors()
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
+        self.end_headers()
+
+    def _static(self, path):
+        """伺服遊戲資料夾裡的檔案（index.html、js、lib、microbit程式）"""
+        from urllib.parse import unquote
+        rel = unquote(path.split("?")[0]).lstrip("/") or "index.html"
+        full = os.path.normpath(os.path.join(GAME_DIR, rel))
+        if not full.startswith(GAME_DIR) or not os.path.isfile(full):
+            self.send_response(404); self._cors(); self.end_headers(); return
+        ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
+        if full.endswith(".js"): ctype = "text/javascript"
+        with open(full, "rb") as f: data = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype.startswith("text/") else ""))
+        self.send_header("Content-Length", str(len(data)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_GET(self):
         if self.path.startswith("/tilt"):
@@ -88,7 +135,7 @@ class H(BaseHTTPRequestHandler):
                     time.sleep(0.01)
             except (BrokenPipeError, ConnectionResetError):
                 return
-        else:
+        elif self.path.startswith("/status"):
             body = json.dumps({"port": latest["port"], "error": latest["error"], "count": latest["count"], "bad": latest["bad"],
                                "age_ms": int((time.time() - latest["t"]) * 1000) if latest["t"] else None,
                                "line": latest["line"]}, ensure_ascii=False).encode()
@@ -98,13 +145,16 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        else:
+            self._static(self.path)
 
 
 if __name__ == "__main__":
-    port = sys.argv[1] if len(sys.argv) > 1 else find_port()
+    port = sys.argv[1] if len(sys.argv) > 1 else None   # 沒指定就自動找，拔掉再插也會自己接回來
     baud = int(sys.argv[2]) if len(sys.argv) > 2 else 115200
-    if not port:
-        print("找不到 micro:bit 的序列埠，確認 USB 線接好。"); sys.exit(1)
+    if not port and not find_port():
+        print("[bridge] 現在找不到 micro:bit，先開著，插上去會自動接。")
     threading.Thread(target=reader, args=(port, baud), daemon=True).start()
-    print(f"[bridge] http://127.0.0.1:{PORT_HTTP}/tilt  （遊戲按「用橋接程式連」）")
+    print(f"[bridge] 遊戲：http://127.0.0.1:{PORT_HTTP}/   （開了之後按「用橋接程式連」）")
+    print(f"[bridge] 狀態：http://127.0.0.1:{PORT_HTTP}/status")
     ThreadingHTTPServer(("127.0.0.1", PORT_HTTP), H).serve_forever()
