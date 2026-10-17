@@ -27,6 +27,7 @@ except ImportError:
 
 PORT_HTTP = 9413
 latest = {"line": "", "t": 0.0, "count": 0, "bad": 0, "port": None, "error": None}
+dbg = {"sse_iter": 0, "sse_sent": 0}
 
 
 def valid(line):
@@ -66,24 +67,45 @@ def reader(port, baud):
                     continue
             s = serial.Serial(port, baud, timeout=1)
             latest["port"] = port; latest["error"] = None
-            print(f"[bridge] 已連 {port} @ {baud}")
+            print(f"[bridge] 已連 {port} @ {baud}", flush=True)
+            # 注意：不要對板子寫任何東西（Ctrl-C／Ctrl-D 之類）。實測 micro:bit V2 收到之後 USB 序列會整個啞掉，要重燒才會回來。
             s.reset_input_buffer()
+            s.timeout = 0.05
+            buf = b""
+            last_ok = time.time()
             while True:
-                raw = s.readline()
-                if not raw:
+                chunk = s.read(512)          # 一次讀一塊再自己切行，比 readline 穩
+                if time.time() - last_ok > 5:
+                    # 5 秒沒資料：把序列埠關掉重開（micro:bit 的 USB 序列偶爾會卡住，重開常常就回來）
+                    latest["error"] = "板子沒送資料，重新開序列埠中…（還是沒反應就換 USB 線／插孔，或重燒 方向盤.hex）"
+                    print("[bridge] 5 秒沒資料，重開序列埠", flush=True)
+                    raise OSError("no data, reopening")
+                if not chunk:
                     continue
-                line = raw.decode("utf-8", "ignore").strip()
-                if not line:
-                    continue
-                if valid(line):
-                    latest["line"] = line; latest["t"] = time.time(); latest["count"] += 1
-                else:
-                    latest["bad"] += 1
+                buf += chunk
+                while b"\n" in buf:
+                    raw, buf = buf.split(b"\n", 1)
+                    line = raw.decode("utf-8", "ignore").strip()
+                    if not line:
+                        continue
+                    if valid(line):
+                        latest["line"] = line; latest["t"] = time.time(); latest["count"] += 1; last_ok = time.time(); latest["error"] = None
+                    else:
+                        latest["bad"] += 1
+                if len(buf) > 200:
+                    buf = b""
         except Exception as e:
-            latest["error"] = str(e)
+            if "reopening" not in str(e):
+                latest["error"] = str(e)
+                print(f"[bridge] 序列埠錯誤：{e}，3 秒後重試", flush=True)
+                time.sleep(3)
+            else:
+                time.sleep(0.5)
             latest["port"] = None
-            print(f"[bridge] 序列埠錯誤：{e}，3 秒後重試")
-            time.sleep(3)
+            try:
+                s.close()
+            except Exception:
+                pass
 
 
 class H(BaseHTTPRequestHandler):
@@ -128,17 +150,20 @@ class H(BaseHTTPRequestHandler):
             last = -1
             try:
                 while True:
+                    dbg["sse_iter"] += 1
                     if latest["count"] != last:
                         last = latest["count"]
                         self.wfile.write(f"data: {latest['line']}\n\n".encode())
-                        self.wfile.flush()
+                        dbg["sse_sent"] += 1
                     time.sleep(0.01)
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, OSError):
                 return
+            except Exception as e:
+                print("[bridge] SSE 錯誤：", repr(e)); return
         elif self.path.startswith("/status"):
             body = json.dumps({"port": latest["port"], "error": latest["error"], "count": latest["count"], "bad": latest["bad"],
                                "age_ms": int((time.time() - latest["t"]) * 1000) if latest["t"] else None,
-                               "line": latest["line"]}, ensure_ascii=False).encode()
+                               "line": latest["line"], "dbg": dbg}, ensure_ascii=False).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._cors()
