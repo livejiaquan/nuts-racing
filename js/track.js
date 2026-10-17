@@ -20,6 +20,7 @@ export function sampleCurve(curve) {
   for (let i = 0; i < SAMPLES; i++) {
     const u = i / SAMPLES;
     const p = curve.getPointAt(u);
+    if (p.y < 0) p.y = 0;   // 曲線在平地段會往下凹（最深 -1.3 m），凹到草地下面路就會「不見」
     const t = curve.getTangentAt(u).normalize();
     t.y = 0; t.normalize();                         // 航向只看水平
     const r = new THREE.Vector3().crossVectors(t, up).normalize();
@@ -327,81 +328,50 @@ export function buildGrandstands(S, scene) {
 }
 
 // ---------- 道具 ----------
-let _nutTex = null, _capTex = null, _leafTex = null;
-function nutTextures() {
-  if (_nutTex) return;
-  _nutTex = makeCanvasTexture(256, 512, (g, W, H) => {
-    const grad = g.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, '#FFC56A'); grad.addColorStop(0.35, '#F09A3E'); grad.addColorStop(0.75, '#C26A1C'); grad.addColorStop(1, '#7A4010');
-    g.fillStyle = grad; g.fillRect(0, 0, W, H);
-    // 淡淡的直紋
-    for (let i = 0; i < 40; i++) { g.fillStyle = 'rgba(255,225,170,' + (0.04 + Math.random() * 0.06) + ')'; const x = Math.random() * W; g.fillRect(x, 0, 1 + Math.random() * 3, H); }
-    // 左上方一道亮光
-    const hl = g.createLinearGradient(0, 0, W, 0);
-    hl.addColorStop(0, 'rgba(255,240,210,0)'); hl.addColorStop(0.22, 'rgba(255,240,210,0.35)'); hl.addColorStop(0.4, 'rgba(255,240,210,0)');
-    g.fillStyle = hl; g.fillRect(0, 0, W, H);
-  });
-  _capTex = makeCanvasTexture(256, 256, (g, W, H) => {
-    g.fillStyle = '#6E4A2C'; g.fillRect(0, 0, W, H);
-    for (let row = 0; row < 7; row++) for (let col = 0; col < 9; col++) {
-      const x = col * 30 + (row % 2 ? 15 : 0), y = row * 34;
-      const grd = g.createLinearGradient(x, y, x, y + 34);
-      grd.addColorStop(0, '#B8814A'); grd.addColorStop(1, '#7E5230');
-      g.fillStyle = grd;
-      g.beginPath(); g.moveTo(x, y + 34); g.quadraticCurveTo(x + 15, y - 8, x + 30, y + 34); g.closePath(); g.fill();
-      g.strokeStyle = 'rgba(40,20,5,.45)'; g.lineWidth = 2; g.stroke();
-    }
-  });
-  _leafTex = makeCanvasTexture(128, 256, (g, W, H) => {
-    g.clearRect(0, 0, W, H);
-    g.fillStyle = '#4C9A3F';
-    g.beginPath(); g.moveTo(64, 6); g.bezierCurveTo(126, 60, 118, 190, 64, 250); g.bezierCurveTo(10, 190, 2, 60, 64, 6); g.closePath(); g.fill();
-    g.strokeStyle = '#2F6E2A'; g.lineWidth = 4; g.beginPath(); g.moveTo(64, 10); g.lineTo(64, 246); g.stroke();
-    for (let k = 0; k < 5; k++) { const y = 50 + k * 38; g.beginPath(); g.moveTo(64, y); g.lineTo(96, y + 24); g.moveTo(64, y); g.lineTo(32, y + 24); g.stroke(); }
-  });
-  _capTex.wrapS = _capTex.wrapT = THREE.RepeatWrapping; _capTex.repeat.set(2, 1);
-}
-
+// 核果：照核果資訊學苑的 logo 做——扁平、兩色橘身、深咖啡光滑殼斗、白色描邊，不走寫實
 export function makeNutMesh() {
-  nutTextures();
   const g = new THREE.Group();
-  // 果身：圓潤的蛋形，底部收成小尖
+  // 果身：圓潤蛋形，底部微尖
   const prof = [];
-  const N = 22;
+  const N = 20;
   for (let i = 0; i <= N; i++) {
     const t = i / N;
-    const r = 0.98 * Math.pow(Math.sin(Math.min(1, t * 1.08) * Math.PI / 2), 0.72);
-    prof.push(new THREE.Vector2(Math.max(0.03, r), -1.0 + t * 1.85));
+    const r = 0.92 * Math.pow(Math.sin(Math.min(1, t * 1.06) * Math.PI / 2), 0.62);
+    prof.push(new THREE.Vector2(Math.max(0.02, r), -0.95 + t * 1.65));
   }
-  const body = new THREE.Mesh(new THREE.LatheGeometry(prof, 40),
-    new THREE.MeshPhysicalMaterial({ map: _nutTex, roughness: 0.25, metalness: 0.0, clearcoat: 0.9, clearcoatRoughness: 0.18, emissive: 0x4A2608, emissiveIntensity: 0.35 }));
-  // 殼斗：比果身略寬，鱗片貼圖＋凹凸
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(1.04, 40, 20, 0, Math.PI * 2, 0, Math.PI * 0.46),
-    new THREE.MeshStandardMaterial({ map: _capTex, bumpMap: _capTex, bumpScale: 0.5, roughness: 0.8 }));
-  cap.position.y = 0.28;
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.09, 10, 40), new THREE.MeshStandardMaterial({ color: 0x6B4727, roughness: 0.85 }));
-  rim.rotation.x = Math.PI / 2; rim.position.y = 0.42;
-  // 彎彎的蒂頭
-  const stem = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.07, 8, 16, 1.5), new THREE.MeshStandardMaterial({ color: 0x4A2A0C, roughness: 1 }));
-  stem.position.set(-0.1, 1.28, 0); stem.rotation.z = -0.3;
-  // 一片小葉子
-  const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 1.0), new THREE.MeshLambertMaterial({ map: _leafTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
-  leaf.position.set(0.3, 1.5, 0.1); leaf.rotation.set(-0.5, 0.4, -1.0);
-  // 卡通式高光
-  const shine = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xFFFFFF, transparent: true, opacity: 0.55, depthWrite: false }));
-  shine.scale.set(0.55, 0.55, 1); shine.position.set(-0.4, 0.1, 0.75);
-  // 柔和光暈
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xFFC14A, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
-  glow.scale.set(5.2, 5.2, 1); glow.position.y = 0.2;
-  // 地上的金色光環
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.1, 8, 40),
-    new THREE.MeshBasicMaterial({ color: 0xFFD86A, transparent: true, opacity: 0.9 }));
-  ring.rotation.x = Math.PI / 2; ring.position.y = -1.22;
-  const ring2 = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.5, 40),
-    new THREE.MeshBasicMaterial({ color: 0xFFE9A8, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
-  ring2.rotation.x = -Math.PI / 2; ring2.position.y = -1.2;
-  g.add(body, cap, rim, stem, leaf, shine, glow, ring, ring2);
-  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  const bodyGeo = new THREE.LatheGeometry(prof, 36);
+  // 兩色：用頂點色做左橘右淡（logo 是左深右淺）
+  const pos = bodyGeo.attributes.position, col = new Float32Array(pos.count * 3);
+  const cA = new THREE.Color(0xF59A3C), cB = new THREE.Color(0xFFD9A3), cc = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const k = THREE.MathUtils.smoothstep(pos.getX(i), -0.6, 0.6);
+    cc.copy(cA).lerp(cB, k); col.set([cc.r, cc.g, cc.b], i * 3);
+  }
+  bodyGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  // Lambert＋自發光：背光面也亮，像 logo 那種平塗感
+  const body = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0xE08A38, emissiveIntensity: 0.4 }));
+  // 殼斗：光滑深咖啡，像一頂帽子
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(1.0, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.44),
+    new THREE.MeshLambertMaterial({ color: 0x6B4324, emissive: 0x3A2212, emissiveIntensity: 0.45 }));
+  cap.position.y = 0.2;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.07, 10, 36), new THREE.MeshStandardMaterial({ color: 0x4E321A, roughness: 0.9 }));
+  rim.rotation.x = Math.PI / 2; rim.position.y = 0.32;
+  // 蒂頭
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.42, 8), new THREE.MeshStandardMaterial({ color: 0x4E321A, roughness: 1 }));
+  stem.position.set(0.05, 1.3, 0); stem.rotation.z = -0.15;
+  // 白色描邊（反向外殼），和 logo 一樣有一圈白邊
+  const outlineMat = new THREE.MeshBasicMaterial({ color: 0xFFFBF0, side: THREE.BackSide });
+  for (const [geo, y, sc] of [[bodyGeo, 0, 1.13], [cap.geometry, 0.2, 1.12]]) {
+    const o = new THREE.Mesh(geo, outlineMat); o.position.y = y; o.scale.setScalar(sc); g.add(o);
+  }
+  // 柔和光暈，讓道具在路上一眼看到（比之前小、淡）
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xFFD080, transparent: true, opacity: 0.38, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.scale.set(3.4, 3.4, 1); glow.position.y = 0.2;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 1.2, 36),
+    new THREE.MeshBasicMaterial({ color: 0xFFE2A0, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = -1.05;
+  g.add(body, cap, rim, stem, glow, ring);
+  g.traverse(o => { if (o.isMesh && o.material !== outlineMat) o.castShadow = true; });
   return g;
 }
 let _glow = null;
@@ -477,9 +447,9 @@ export function placeItems(S, scene) {
     let lat = Math.sin(k * 1.3) * (hw - 2.4);
     if (Math.abs(turn[i]) > 0.2) lat = -Math.sign(turn[i]) * (hw - 3.0) * 0.7;   // 左轉時內側在左（負）
     const m = nutProto.clone();
-    m.scale.set(1.4, 1.4, 1.4);
+    m.scale.set(0.95, 0.95, 0.95);
     const p = S.p[i], r = S.r[i];
-    m.position.set(p.x + r.x * lat, p.y + 1.45, p.z + r.z * lat);
+    m.position.set(p.x + r.x * lat, p.y + 1.15, p.z + r.z * lat);
     scene.add(m);
     nuts.push({ mesh: m, alive: true, index: i, lat, spin: Math.random() * 6 });
   }

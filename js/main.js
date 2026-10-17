@@ -443,7 +443,7 @@ function updateItems(dt) {
     if (!n.alive) continue;
     n.spin += dt * 2.2;
     n.mesh.rotation.y = n.spin;
-    n.mesh.position.y = S.p[n.index].y + 1.3 + Math.sin(n.spin * 1.5) * 0.18;
+    n.mesh.position.y = S.p[n.index].y + 1.15 + Math.sin(n.spin * 1.5) * 0.15;
   }
   for (const c of items.cones) {
     if (c.hit <= 0) continue;

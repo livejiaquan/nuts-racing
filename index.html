@@ -64,7 +64,8 @@
   #hud-map { left:18px; bottom:18px; padding:6px; }
   #minimap { width:220px; height:200px; display:block; }
   #hud-nutcard { right:18px; top:18px; font-size:20px; font-weight:700; display:flex; align-items:center; gap:8px; }
-  #hud-nutcard i { width:22px; height:26px; background:radial-gradient(circle at 40% 35%, #D98A41, #8A4A12); border-radius:50% 50% 50% 50% / 40% 40% 60% 60%; display:inline-block; }
+  #hud-nutcard i { width:22px; height:26px; background:linear-gradient(90deg, #E8923A 45%, #F8CC8E 55%); border-radius:50% 50% 50% 50% / 42% 42% 58% 58%; display:inline-block; position:relative; box-shadow:0 0 0 2px #fff; }
+  #hud-nutcard i::before { content:''; position:absolute; left:-2px; right:-2px; top:-1px; height:11px; background:#5A3A1E; border-radius:50% 50% 30% 30% / 70% 70% 30% 30%; }
   #countdown { position:absolute; left:0; right:0; top:24%; text-align:center; font-size:190px; font-weight:900; color:var(--cream); line-height:1;
     text-shadow:0 10px 0 var(--forest-dark), 0 0 60px rgba(232,116,59,.7); }
   #countdown.pop { animation:countpop .7s cubic-bezier(.2,1.4,.4,1) both; }
