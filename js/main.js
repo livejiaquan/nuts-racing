@@ -4,7 +4,7 @@ import { PALETTE, createRenderer, createScene, addSky, addClouds, addLights, fol
 import { ROAD_HALF, SAMPLES, buildCurve, sampleCurve, nearest, buildRoad, buildGate, placeItems, syncItems, buildCornerGear, buildBridges } from './track.js';
 import { buildKaohsiung } from './kaohsiung.js';
 import { buildCityRoads, buildBuildings, buildStreetFurniture, buildLandmarks, buildCrosswalks, parkTreeSpots, buildParkedCars, buildParkTrees } from './city.js';
-import { loadModels, MODELS, cullByDistance } from './models.js';
+import { loadModels, MODELS, cullByDistance, buildChunks } from './models.js';
 import { ROADS } from './osm_data.js';
 import { KART_COLORS, buildKart, animateKart } from './kart.js';
 import * as MBit from './microbit.js';
@@ -612,7 +612,7 @@ function drawMinimap() {
   mctx.clearRect(0, 0, W, H);
   mctx.drawImage(mini.base, 0, 0);
   for (const r of rivals) {
-    mctx.fillStyle = '#' + r.kart.group.children[1].material.color.getHexString();
+    mctx.fillStyle = '#' + r.kart.color.getHexString();
     mctx.beginPath(); mctx.arc(r.pos.x * mini.sx + mini.ox, r.pos.z * mini.sz + mini.oz, 4, 0, 7); mctx.fill();
   }
   const px = player.pos.x * mini.sx + mini.ox, pz = player.pos.z * mini.sz + mini.oz;
@@ -688,7 +688,7 @@ function finishRace() {
   SFX.finish(); bgmSet('title');
   const rank = computeRank();
   const rows = [{ name: '你', time: player.finishTime, prog: progressOf(player), me: true, color: '#' + KART_COLORS[playerColorIdx].hex.toString(16).padStart(6, '0') }];
-  for (const r of rivals) rows.push({ name: r.name, time: r.finishTime, prog: progressOf(r), color: '#' + r.kart.group.children[1].material.color.getHexString() });
+  for (const r of rivals) rows.push({ name: r.name, time: r.finishTime, prog: progressOf(r), color: '#' + r.kart.color.getHexString() });
   rows.sort((a, b) => (a.time && b.time) ? a.time - b.time : (a.time ? -1 : b.time ? 1 : b.prog - a.prog));
   const best = Math.min(...player.laps);
   el.resultBody.innerHTML =
@@ -859,7 +859,7 @@ async function bootStages() {
   await stage(48, '畫左營的馬路', () => { buildCityRoads(scene, S); buildCrosswalks(scene, S); });
   await stage(60, '蓋街屋與招牌', () => { buildBuildings(scene, S); buildStreetFurniture(scene, S); buildParkedCars(scene, S); });
   await stage(68, '彎道、高架、橋', () => { buildCornerGear(S, scene); buildBridges(S, scene); });
-  await stage(76, '85 大樓、港口、愛河', () => { buildKaohsiung(scene, S); landmarks = buildLandmarks(scene, S); const spots = parkTreeSpots(S); if (!buildParkTrees(scene, spots)) addTrees(scene, spots); });
+  await stage(76, '85 大樓、港口、愛河', () => { buildKaohsiung(scene, S); landmarks = buildLandmarks(scene, S); const spots = parkTreeSpots(S); if (!buildParkTrees(scene, spots)) addTrees(scene, spots);  buildChunks(scene); });
   await stage(84, '放核果與道具', () => {
     items = placeItems(S, scene);
     flame = new Particles(140, 0xFFB347, 0.9); dust = new Particles(160, 0xC9B98A, 1.1); sparkle = new Particles(80, 0xFFF1A8, 0.7); smoke = new Particles(160, 0xE8E6E0, 1.6);

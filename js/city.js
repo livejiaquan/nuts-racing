@@ -71,7 +71,7 @@ export function distToTrack(S, x, z) {
 }
 
 // ---------- 其他馬路（不是賽道的那些） ----------
-function openStrip(pts, half, y, color) {
+function openStrip(pts, half, y) {
   const pos = [], idx = [];
   const n = pts.length;
   for (let i = 0; i < n; i++) {
@@ -86,21 +86,20 @@ function openStrip(pts, half, y, color) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setIndex(idx); geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
-  m.receiveShadow = true;
-  return m;
+  return geo;
 }
 
 export function buildCityRoads(scene, S) {
-  const roadGroup = new THREE.Group();
+  // 一百多條路的人行道與柏油各合成一個幾何（原本每段兩個 mesh，起跑線視角就有 150 多個 draw call）
+  const walks = [], roads = [];
   for (const r of ROADS) {
     const half = ROAD_W[r.hw] || 4;
     // 切成「離賽道夠遠」的連續小段，避免和賽道路面重疊
     let run = [];
     const flush = () => {
       if (run.length >= 2) {
-        roadGroup.add(openStrip(run, half + 2.2, 0.005, 0xD2CEC2));   // 人行道
-        roadGroup.add(openStrip(run, half, 0.01, 0x565B64));          // 柏油
+        walks.push(openStrip(run, half + 2.2, 0.005));   // 人行道
+        roads.push(openStrip(run, half, 0.01));          // 柏油
         for (let i = 0; i < run.length - 1; i++) allSegs.push([run[i][0], run[i][1], run[i + 1][0], run[i + 1][1], half + 2.2]);
       }
       run = [];
@@ -116,7 +115,12 @@ export function buildCityRoads(scene, S) {
     const a = S.p[i], b = S.p[(i + 6) % SAMPLES];
     allSegs.push([a.x, a.z, b.x, b.z, S.w[i] + SIDEWALK, true]);
   }
-  scene.add(roadGroup);
+  for (const [geos, color] of [[walks, 0xD2CEC2], [roads, 0x565B64]]) {
+    if (!geos.length) continue;
+    const m = new THREE.Mesh(mergeGeometries(geos, false), new THREE.MeshLambertMaterial({ color }));
+    m.receiveShadow = true; scene.add(m);
+    geos.forEach(g => g.dispose());
+  }
 }
 
 // ---------- 街屋 ----------
