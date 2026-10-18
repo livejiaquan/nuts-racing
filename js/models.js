@@ -74,6 +74,7 @@ export function instanceModel(scene, name, items, opts = {}) {
       cx += it.x; cz += it.z;
     });
     im.castShadow = opts.castShadow !== false;
+    im.userData.shadow = im.castShadow;
     im.receiveShadow = true;
     im.computeBoundingSphere();
     im.frustumCulled = true;
@@ -87,11 +88,14 @@ export function instanceModel(scene, name, items, opts = {}) {
 }
 
 // 每幀呼叫：離鏡頭太遠的方格關掉（霧已經快看不到了）
+// shadowPos 是影子相機跟著的點（玩家）：方格中心離它 120 公尺（加方格半對角線）以外就不投影，陰影相機半寬只有 90 公尺，投了也看不到
 const _tmp = new THREE.Vector3();
-export function cullByDistance(camPos) {
+const SHADOW_DIST = 120 + CHUNK * 0.71;
+export function cullByDistance(camPos, shadowPos = camPos) {
   for (const im of CHUNKS) {
     _tmp.copy(im.userData.center); _tmp.y = camPos.y;
     im.visible = _tmp.distanceTo(camPos) < im.userData.far + CHUNK * 0.75;
+    if (im.visible) { _tmp.y = shadowPos.y; im.castShadow = im.userData.shadow && _tmp.distanceTo(shadowPos) < SHADOW_DIST; }
   }
 }
 

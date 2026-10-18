@@ -666,7 +666,7 @@ function startRace() {
   document.getElementById('mb-panel').classList.add('dim');
   engineStart(); bgmStart(); bgmSet('race');
   SFX.click();
-  autoQ.t = 0; autoQ.frames = 0; autoQ.done = autoQ.done || quality !== 'high';
+  dyn.t = 0; dyn.frames = 0; dyn.slow = 0;
 }
 
 const BOARD_KEY = 'nuts-racing-board-v1';
@@ -738,12 +738,34 @@ function setPlayerColor(i) {
 
 // ---------- 畫質 ----------
 let quality = 'high';
-const autoQ = { t: 0, frames: 0, done: false };
+// 動態解析度：每 0.5 秒看平均幀時間，太慢就把 pixelRatio 降 0.1（最低 0.75），夠快就升回來（最高 1.5 或螢幕的 DPR）
+// 升的門檻用 17.5 ms 而不是 13 ms：60 Hz 螢幕 vsync 之下，順的時候每幀就是 16.7 ms，13 ms 永遠等不到
+const dyn = { t: 0, frames: 0, pr: Math.min(window.devicePixelRatio, 1.5), max: Math.min(window.devicePixelRatio, 1.5), min: 0.75, slow: 0, auto: true };
+function applyPixelRatio(pr) {
+  dyn.pr = Math.round(pr * 10) / 10;
+  renderer.setPixelRatio(dyn.pr);
+  resize();   // 會一起叫 fx.setSize
+}
+function updateDynamicRes(dt) {
+  if (!dyn.auto || gameState === 'loading') return;
+  if (dt > 0.25) return;   // 分頁切回來的那一幀不算
+  dyn.t += dt; dyn.frames++;
+  if (dyn.t < 0.5) return;
+  const avg = dyn.t / dyn.frames * 1000;
+  dyn.t = 0; dyn.frames = 0;
+  if (avg > 20 && dyn.pr > dyn.min + 1e-6) applyPixelRatio(Math.max(dyn.min, dyn.pr - 0.1));
+  else if (avg < 17.5 && dyn.pr < dyn.max - 1e-6) applyPixelRatio(Math.min(dyn.max, dyn.pr + 0.1));
+  // 解析度已經降到底還是不到 50 fps，連續 3 秒就整個切低畫質（關陰影與後製）
+  if (quality === 'high' && gameState === 'race' && avg > 20 && dyn.pr <= dyn.min + 1e-6) { dyn.slow += 0.5; if (dyn.slow >= 3) { setQuality('low'); toast('這台電腦跑不順，已自動調低畫質'); } }
+  else dyn.slow = 0;
+}
 function setQuality(q) {
   quality = q;
   const high = q === 'high';
   renderer.shadowMap.enabled = high;
-  renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio, 1.5) : 1);
+  dyn.max = high ? Math.min(window.devicePixelRatio, 1.5) : 1;
+  dyn.pr = Math.min(dyn.pr, dyn.max);
+  renderer.setPixelRatio(dyn.pr);
   if (fx) fx.enabled = high;
   scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(m => m.needsUpdate = true); } });
   resize();
@@ -778,6 +800,7 @@ function physicsStep(dt) {
 
 function frame(now) {
   let dt = (now - last) / 1000; last = now;
+  const rawDt = dt;
   if (dt > 0.1) dt = 0.1;
   if (hitSlow > 0) { hitSlow -= dt; dt *= 0.35; }   // 撞到東西的一瞬間慢動作
 
@@ -793,17 +816,14 @@ function frame(now) {
   for (const c of clouds.children) { c.position.x += c.userData.speed * dt * 2; if (c.position.x > 900) c.position.x = -900; }
   updateCamera(dt);
   syncItems(items, camera.quaternion, camera.position);
-  cullByDistance(camera.position);
-  followShadow(lights.sun, (gameState === 'title' || gameState === 'loading') ? camera.position : player.pos);
+  const shadowAt = (gameState === 'title' || gameState === 'loading') ? camera.position : player.pos;
+  cullByDistance(camera.position, shadowAt);
+  followShadow(lights.sun, shadowAt);
   engineUpdate(Math.min(1, Math.abs(player.speed) / MAX_SPEED), gameState === 'race');
   skidUpdate(gameState === 'race' && (player.drift !== 0 || (Math.abs(player.steer) > 0.55 && player.speed > MAX_SPEED * 0.55) || (player.braking && player.speed > 20)) && !player.offroad);
   if (gameState !== 'title') updateHUD(); else { el.mbState.textContent = MBit.MB.status; el.mbBtn.textContent = MBit.MB.connected ? '中斷連線' : '連接 micro:bit'; }
 
-  // 自動畫質：比賽開始 2 秒後量 3 秒，跑不到 45 fps 就自動降
-  if (gameState === 'race' && !autoQ.done) {
-    autoQ.t += dt; if (autoQ.t > 2) autoQ.frames++;
-    if (autoQ.t > 5) { autoQ.done = true; const fps = autoQ.frames / 3; if (fps < 45) { setQuality('low'); toast('這台電腦跑不順，已自動調低畫質'); } }
-  }
+  updateDynamicRes(rawDt);
 
   fx.render(player.boost > 0 ? Math.min(1, player.boost) : 0);
   requestAnimationFrame(frame);
@@ -872,7 +892,7 @@ try { document.getElementById('player-name').value = localStorage.getItem('nuts-
 document.getElementById('player-name').addEventListener('change', e => { try { localStorage.setItem('nuts-racing-name', e.target.value); } catch (err) {} });
 document.getElementById('btn-again').addEventListener('click', startRace);
 document.getElementById('btn-title').addEventListener('click', backToTitle);
-document.getElementById('btn-quality').addEventListener('click', () => { setQuality(quality === 'high' ? 'low' : 'high'); autoQ.done = true; });
+document.getElementById('btn-quality').addEventListener('click', () => { setQuality(quality === 'high' ? 'low' : 'high'); dyn.slow = 0; });
 
 const ONLINE = location.protocol === 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 if (ONLINE) {
@@ -899,6 +919,6 @@ if (loadEl.tip) loadEl.tip.textContent = '小提示：' + TIPS[Math.floor(Math.r
 boot();
 
 // 除錯口（測試用）：window.__game
-window.__game = { audioState, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
+window.__game = { audioState, dyn, applyPixelRatio, updateDynamicRes, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
   // 量 draw call：renderer.info 每次 render 會歸零，後製最後一道只有 1 個 call，所以只量場景那一道
   measure() { const r = renderer; r.info.autoReset = false; r.info.reset(); r.setRenderTarget(fx.enabled ? fx.rt : null); r.render(scene, camera); const o = { calls: r.info.render.calls, triangles: r.info.render.triangles, pixelRatio: r.getPixelRatio() }; r.info.autoReset = true; r.setRenderTarget(null); return o; } };
