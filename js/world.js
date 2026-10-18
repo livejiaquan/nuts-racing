@@ -165,20 +165,35 @@ export function addGround(scene) {
   return ground;
 }
 
+// 把一堆 non-indexed 幾何合成一個（只有 position／normal／uv）
+export function mergeCones(geos) {
+  let n = 0; for (const g of geos) n += g.attributes.position.count;
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+  let o = 0;
+  for (const g of geos) { pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); o += g.attributes.position.count; g.dispose(); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  return geo;
+}
+
 export function addMountains(scene) {
   const group = new THREE.Group();
+  // 每一圈山合成一個幾何（一個 draw call）
   const mk = (r, h, color, n, yOff) => {
     const mat = new THREE.MeshLambertMaterial({ color, flatShading: true });
+    const geos = [];
+    const tmp = new THREE.Object3D();
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
       const rr = r + (Math.random() - 0.5) * 60;
       const hh = h * (0.6 + Math.random() * 0.8);
-      const geo = new THREE.ConeGeometry(70 + Math.random() * 90, hh, 5 + Math.floor(Math.random() * 3));
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(Math.cos(a) * rr, hh / 2 + yOff, Math.sin(a) * rr);
-      m.rotation.y = Math.random() * Math.PI;
-      group.add(m);
+      const geo = new THREE.ConeGeometry(70 + Math.random() * 90, hh, 5 + Math.floor(Math.random() * 3)).toNonIndexed();
+      tmp.position.set(Math.cos(a) * rr, hh / 2 + yOff, Math.sin(a) * rr);
+      tmp.rotation.y = Math.random() * Math.PI;
+      tmp.updateMatrix(); geos.push(geo.applyMatrix4(tmp.matrix));
     }
+    group.add(new THREE.Mesh(mergeCones(geos), mat));
   };
   mk(1250, 130, PALETTE.mountain, 30, -6);
   mk(1500, 200, PALETTE.mountainFar, 26, -10);

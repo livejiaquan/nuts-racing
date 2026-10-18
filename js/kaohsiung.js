@@ -1,6 +1,6 @@
 // 高雄地標：85 大樓、流行音樂中心、高雄港（貨櫃、起重機、海）、駁二倉庫、巨蛋、美麗島站光之穹頂、愛河、旗津燈塔
 import * as THREE from 'three';
-import { makeCanvasTexture, PALETTE } from './world.js';
+import { makeCanvasTexture, PALETTE, mergeCones } from './world.js';
 import { RIVER, RIVER_W } from './zones.js';
 
 function lam(color) { return new THREE.MeshLambertMaterial({ color }); }
@@ -203,8 +203,11 @@ function loveRiver(scene) {
     scene.add(g);
   }
   // 河邊路燈
+  // 燈桿、燈頭各一個 InstancedMesh（原本一支一個 mesh，約 150 個 draw call）
   const lampGeo = new THREE.CylinderGeometry(0.12, 0.16, 5, 6), lampMat = lam(0x6E7378);
   const headGeo = new THREE.SphereGeometry(0.5, 8, 6), headMat = new THREE.MeshStandardMaterial({ color: 0xFFF2C2, emissive: 0xFFE9A8, emissiveIntensity: 0.7 });
+  const poles = [], heads = [];
+  const m4 = new THREE.Matrix4();
   for (let i = 0; i < RIVER.length - 1; i++) {
     const a = RIVER[i], b = RIVER[i + 1];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -213,21 +216,29 @@ function loveRiver(scene) {
       let tx = b[0] - a[0], tz = b[1] - a[1]; tx /= len; tz /= len; const rx = -tz, rz = tx;
       for (const sd of [-1, 1]) {
         const off = RIVER_W / 2 + 5;
-        const p = new THREE.Mesh(lampGeo, lampMat); p.position.set(x + rx * off * sd, 2.5, z + rz * off * sd); scene.add(p);
-        const h = new THREE.Mesh(headGeo, headMat); h.position.set(x + rx * off * sd, 5.2, z + rz * off * sd); scene.add(h);
+        poles.push(m4.makeTranslation(x + rx * off * sd, 2.5, z + rz * off * sd).clone());
+        heads.push(m4.makeTranslation(x + rx * off * sd, 5.2, z + rz * off * sd).clone());
       }
     }
+  }
+  for (const [geo, mat, list] of [[lampGeo, lampMat, poles], [headGeo, headMat, heads]]) {
+    if (!list.length) continue;
+    const im = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach((m, k) => im.setMatrixAt(k, m));
+    scene.add(im);
   }
 }
 
 // ---------- 壽山 ----------
 function shoushan(scene) {
   const mat = new THREE.MeshLambertMaterial({ color: 0x6FA97F, flatShading: true });
+  const hills = [], tmp = new THREE.Object3D();
   for (let i = 0; i < 7; i++) {
     const h = 90 + Math.random() * 70;
-    const m = new THREE.Mesh(new THREE.ConeGeometry(110 + Math.random() * 60, h, 7), mat);
-    m.position.set(760 + Math.cos(i * 1.1) * 120, h / 2 - 6, 260 + i * 95); m.rotation.y = Math.random(); scene.add(m);
+    tmp.position.set(760 + Math.cos(i * 1.1) * 120, h / 2 - 6, 260 + i * 95); tmp.rotation.y = Math.random(); tmp.updateMatrix();
+    hills.push(new THREE.ConeGeometry(110 + Math.random() * 60, h, 7).toNonIndexed().applyMatrix4(tmp.matrix));
   }
+  scene.add(new THREE.Mesh(mergeCones(hills), mat));
 }
 
 export function buildKaohsiung(scene, S) {

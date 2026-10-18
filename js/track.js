@@ -329,8 +329,10 @@ export function buildGrandstands(S, scene) {
 
 // ---------- 道具 ----------
 // 核果：照核果資訊學苑的 logo 做——扁平、兩色橘身、深咖啡光滑殼斗、白色描邊，不走寫實
-export function makeNutMesh() {
-  const g = new THREE.Group();
+// 核果的零件表（幾何＋材質＋局部位置），makeNutMesh 和 placeItems 的 InstancedMesh 共用
+let _nutParts = null;
+export function nutParts() {
+  if (_nutParts) return _nutParts;
   // 果身：圓潤蛋形，底部微尖
   const prof = [];
   const N = 20;
@@ -348,32 +350,40 @@ export function makeNutMesh() {
     cc.copy(cA).lerp(cB, k); col.set([cc.r, cc.g, cc.b], i * 3);
   }
   bodyGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  // Lambert＋自發光：背光面也亮，像 logo 那種平塗感
-  const body = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0xE08A38, emissiveIntensity: 0.4 }));
-  // 殼斗：光滑深咖啡，像一頂帽子
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(1.0, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.44),
-    new THREE.MeshLambertMaterial({ color: 0x6B4324, emissive: 0x3A2212, emissiveIntensity: 0.45 }));
-  cap.position.y = 0.2;
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.07, 10, 36), new THREE.MeshStandardMaterial({ color: 0x4E321A, roughness: 0.9 }));
-  rim.rotation.x = Math.PI / 2; rim.position.y = 0.32;
-  // 蒂頭
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.42, 8), new THREE.MeshStandardMaterial({ color: 0x4E321A, roughness: 1 }));
-  stem.position.set(0.05, 1.3, 0); stem.rotation.z = -0.15;
-  // 白色描邊（反向外殼），和 logo 一樣有一圈白邊
+  const capGeo = new THREE.SphereGeometry(1.0, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.44);
   const outlineMat = new THREE.MeshBasicMaterial({ color: 0xFFFBF0, side: THREE.BackSide });
-  for (const [geo, y, sc] of [[bodyGeo, 0, 1.13], [cap.geometry, 0.2, 1.12]]) {
-    const o = new THREE.Mesh(geo, outlineMat); o.position.y = y; o.scale.setScalar(sc); g.add(o);
+  const P = (geo, mat, x, y, z, rx, ry, rz, s, shadow) => ({ geo, mat, pos: new THREE.Vector3(x, y, z), rot: new THREE.Euler(rx, ry, rz), scale: s, shadow });
+  _nutParts = [
+    // Lambert＋自發光：背光面也亮，像 logo 那種平塗感
+    P(bodyGeo, new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0xE08A38, emissiveIntensity: 0.4 }), 0, 0, 0, 0, 0, 0, 1, true),
+    // 殼斗：光滑深咖啡，像一頂帽子
+    P(capGeo, new THREE.MeshLambertMaterial({ color: 0x6B4324, emissive: 0x3A2212, emissiveIntensity: 0.45 }), 0, 0.2, 0, 0, 0, 0, 1, true),
+    P(new THREE.TorusGeometry(0.98, 0.07, 10, 36), new THREE.MeshLambertMaterial({ color: 0x4E321A }), 0, 0.32, 0, Math.PI / 2, 0, 0, 1, true),
+    // 蒂頭
+    P(new THREE.CylinderGeometry(0.07, 0.1, 0.42, 8), new THREE.MeshLambertMaterial({ color: 0x4E321A }), 0.05, 1.3, 0, 0, 0, -0.15, 1, true),
+    // 白色描邊（反向外殼），和 logo 一樣有一圈白邊
+    P(bodyGeo, outlineMat, 0, 0, 0, 0, 0, 0, 1.13, false),
+    P(capGeo, outlineMat, 0, 0.2, 0, 0, 0, 0, 1.12, false),
+    // 地上的淡光環
+    P(new THREE.RingGeometry(0.5, 1.2, 36), new THREE.MeshBasicMaterial({ color: 0xFFE2A0, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }), 0, -1.05, 0, -Math.PI / 2, 0, 0, 1, false)
+  ];
+  return _nutParts;
+}
+
+export function makeNutMesh() {
+  const g = new THREE.Group();
+  for (const pt of nutParts()) {
+    const m = new THREE.Mesh(pt.geo, pt.mat);
+    m.position.copy(pt.pos); m.rotation.copy(pt.rot); m.scale.setScalar(pt.scale); m.castShadow = pt.shadow;
+    g.add(m);
   }
   // 柔和光暈，讓道具在路上一眼看到（比之前小、淡）
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xFFD080, transparent: true, opacity: 0.38, depthWrite: false, blending: THREE.AdditiveBlending }));
   glow.scale.set(3.4, 3.4, 1); glow.position.y = 0.2;
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 1.2, 36),
-    new THREE.MeshBasicMaterial({ color: 0xFFE2A0, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = -1.05;
-  g.add(body, cap, rim, stem, glow, ring);
-  g.traverse(o => { if (o.isMesh && o.material !== outlineMat) o.castShadow = true; });
+  g.add(glow);
   return g;
 }
+
 let _glow = null;
 function glowTex() {
   if (_glow) return _glow;
@@ -385,17 +395,32 @@ function glowTex() {
   _glow = new THREE.CanvasTexture(c); return _glow;
 }
 
-export function makeConeMesh() {
-  const g = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.12, 1.3), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-  base.position.y = 0.06;
-  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.5, 10), new THREE.MeshStandardMaterial({ color: 0xFF8A2A, emissive: 0x8A2E00, emissiveIntensity: 0.45, roughness: 0.6 }));
-  cone.position.y = 0.85;
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.4, 0.22, 10), new THREE.MeshStandardMaterial({ color: 0xFFFFFF, emissive: 0xFFFFFF, emissiveIntensity: 0.5 }));
-  ring.position.y = 1.0;
-  g.add(base, cone, ring);
-  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  return g;
+// 三角錐零件表：底座、錐身、白環
+export function coneParts() {
+  const P = (geo, mat, y) => ({ geo, mat, pos: new THREE.Vector3(0, y, 0), rot: new THREE.Euler(), scale: 1, shadow: true });
+  return [
+    P(new THREE.BoxGeometry(1.3, 0.12, 1.3), new THREE.MeshLambertMaterial({ color: 0x222222 }), 0.06),
+    P(new THREE.ConeGeometry(0.5, 1.5, 10), new THREE.MeshStandardMaterial({ color: 0xFF8A2A, emissive: 0x8A2E00, emissiveIntensity: 0.45, roughness: 0.6 }), 0.85),
+    P(new THREE.CylinderGeometry(0.33, 0.4, 0.22, 10), new THREE.MeshStandardMaterial({ color: 0xFFFFFF, emissive: 0xFFFFFF, emissiveIntensity: 0.5 }), 1.0)
+  ];
+}
+
+// 一組零件 → 每個零件一個 InstancedMesh（count 個實例）。回傳 { meshes, set(i, matrix), hide(i) }
+const _pm = new THREE.Matrix4(), _lm = new THREE.Matrix4(), _lq = new THREE.Quaternion(), _ls = new THREE.Vector3();
+function instanceParts(parts, count, scene) {
+  const meshes = parts.map(pt => {
+    const im = new THREE.InstancedMesh(pt.geo, pt.mat, count);
+    im.castShadow = pt.shadow; im.receiveShadow = false;
+    im.frustumCulled = false;   // 實例散在整條賽道，每幀 bounding sphere 不划算，直接畫
+    _lq.setFromEuler(pt.rot); _ls.setScalar(pt.scale);
+    im.userData.local = new THREE.Matrix4().compose(pt.pos, _lq, _ls);
+    scene.add(im);
+    return im;
+  });
+  // 每幀把要畫的實例從 0 開始緊密排，再把 count 設成實際數量：沒畫的不佔頂點處理（縮成 0 的實例 GPU 還是會算）
+  const set = (i, m) => { for (const im of meshes) { _pm.multiplyMatrices(m, im.userData.local); im.setMatrixAt(i, _pm); } };
+  const flush = (n) => { for (const im of meshes) { im.count = n; im.instanceMatrix.needsUpdate = true; } };
+  return { meshes, set, flush };
 }
 
 export function makeBoostPad() {
@@ -436,28 +461,26 @@ export function findCorners(S) {
 
 export function placeItems(S, scene) {
   const nuts = [], cones = [], pads = [];
-  const nutProto = makeNutMesh();
-  const coneProto = makeConeMesh();
   const { turn, corners } = findCorners(S);
 
   // 核果：每 20 公尺一顆。直路左右交錯，彎道擺在內側（引導走賽車線）
+  // 畫法：每個零件一個 InstancedMesh（約 120 顆 × 7 件 = 7 個 draw call，不是 840 個）
   for (let d = 40, k = 0; d < S.length - 20; d += 20, k++) {
     const i = S.d.findIndex(x => x >= d);
     const hw = S.w[i];
     let lat = Math.sin(k * 1.3) * (hw - 2.4);
     if (Math.abs(turn[i]) > 0.2) lat = -Math.sign(turn[i]) * (hw - 3.0) * 0.7;   // 左轉時內側在左（負）
-    const m = nutProto.clone();
-    m.scale.set(0.95, 0.95, 0.95);
     const p = S.p[i], r = S.r[i];
-    m.position.set(p.x + r.x * lat, p.y + 1.15, p.z + r.z * lat);
-    scene.add(m);
-    nuts.push({ mesh: m, alive: true, index: i, lat, spin: Math.random() * 6 });
+    nuts.push({ idx: nuts.length, pos: new THREE.Vector3(p.x + r.x * lat, p.y + 1.15, p.z + r.z * lat), alive: true, index: i, lat, spin: Math.random() * 6 });
   }
+  const nutInst = instanceParts(nutParts(), nuts.length, scene);
+  // 光暈：原本是 Sprite，改成一個 InstancedMesh 的方形面，每幀轉向鏡頭
+  const glow = new THREE.InstancedMesh(new THREE.PlaneGeometry(3.4, 3.4),
+    new THREE.MeshBasicMaterial({ map: glowTex(), color: 0xFFD080, transparent: true, opacity: 0.38, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), nuts.length);
+  glow.frustumCulled = false; scene.add(glow);
   // 三角錐：直路上每 90 公尺一組（不擋正中間）；彎道前 40 公尺做減速彎（chicane）
   const putCone = (i, lat) => {
-    const m = coneProto.clone();
-    m.position.set(S.p[i].x + S.r[i].x * lat, S.p[i].y, S.p[i].z + S.r[i].z * lat);
-    scene.add(m); cones.push({ mesh: m, index: i, lat, hit: 0, vel: null });
+    cones.push({ idx: cones.length, pos: new THREE.Vector3(S.p[i].x + S.r[i].x * lat, S.p[i].y, S.p[i].z + S.r[i].z * lat), rot: new THREE.Euler(), index: i, lat, hit: 0, vel: null, spin: 0 });
   };
   for (let d = 150, k = 0; d < S.length - 60; d += 90, k++) {
     const i = S.d.findIndex(x => x >= d);
@@ -484,7 +507,41 @@ export function placeItems(S, scene) {
     scene.add(m);
     pads.push({ mesh: m, index: i, lat: 0 });
   }
-  return { nuts, cones, pads, corners };
+  const coneInst = instanceParts(coneParts(), cones.length, scene);
+  return { nuts, cones, pads, corners, nutInst, glow, coneInst };
+}
+
+// 每幀把核果、三角錐的位置寫進 InstancedMesh。camQuat 是鏡頭的旋轉（光暈要面向鏡頭）
+const _sm = new THREE.Matrix4(), _sq = new THREE.Quaternion(), _ss = new THREE.Vector3(), _se = new THREE.Euler();
+const ITEM_FAR2 = 200 * 200;   // 離鏡頭 200 公尺以外的道具不畫（1 公尺大的核果在那裡只剩一兩個像素）
+const _fwd = new THREE.Vector3(), _rel = new THREE.Vector3();
+// 道具在鏡頭後面 12 公尺以外、或太遠，就不畫（InstancedMesh 沒辦法逐顆做視錐剔除，自己做）
+function itemHidden(pos, camPos) {
+  if (!camPos) return false;
+  _rel.subVectors(pos, camPos);
+  if (_rel.lengthSq() > ITEM_FAR2) return true;
+  return _rel.dot(_fwd) < -12;
+}
+export function syncItems(items, camQuat, camPos) {
+  const { nuts, cones, nutInst, glow, coneInst } = items;
+  _fwd.set(0, 0, -1).applyQuaternion(camQuat);
+  _ss.setScalar(0.95);
+  let k = 0;
+  for (const n of nuts) {
+    if (!n.alive || itemHidden(n.pos, camPos)) continue;
+    _se.set(0, n.spin, 0); _sq.setFromEuler(_se);
+    _sm.compose(n.pos, _sq, _ss); nutInst.set(k, _sm);
+    _ss.setScalar(1); _sm.compose(n.pos, camQuat, _ss); _sm.elements[13] += 0.2; glow.setMatrixAt(k, _sm); _ss.setScalar(0.95);
+    k++;
+  }
+  nutInst.flush(k); glow.count = k; glow.instanceMatrix.needsUpdate = true;
+  _ss.setScalar(1);
+  k = 0;
+  for (const c of cones) {
+    if (itemHidden(c.pos, camPos)) continue;
+    _sq.setFromEuler(c.rot); _sm.compose(c.pos, _sq, _ss); coneInst.set(k, _sm); k++;
+  }
+  coneInst.flush(k);
 }
 
 // 橋：路面高於地面的地方加欄杆、橋墩、橋面側板
@@ -522,7 +579,7 @@ export function buildCornerGear(S, scene) {
   const tireGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.42, 12);
   const tireMat = new THREE.MeshLambertMaterial({ color: 0x1E1E1E });
   const tireMatW = new THREE.MeshLambertMaterial({ color: 0xF4F1E8 });
-  const mats = [];
+  const mats = [], legs = [];
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
   const chevronTex = makeCanvasTexture(512, 256, (g, W, H) => {
     g.fillStyle = '#E8743B'; g.fillRect(0, 0, W, H);
@@ -549,9 +606,14 @@ export function buildCornerGear(S, scene) {
     if (c.dir < 0) sign.scale.x = -1;   // 右轉的箭頭要朝右
     scene.add(sign);
     for (const x of [-2.6, 2.6]) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.2, 6), new THREE.MeshLambertMaterial({ color: 0x555555 }));
-      leg.position.copy(sign.position); leg.position.y = 0.6; leg.translateX(x); scene.add(leg);
+      const leg = new THREE.Object3D();
+      leg.position.copy(sign.position); leg.position.y = 0.6; leg.quaternion.copy(sign.quaternion); leg.translateX(x);
+      leg.updateMatrix(); legs.push(leg.matrix.clone());
     }
+  }
+  if (legs.length) {
+    const im = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.08, 1.2, 6), new THREE.MeshLambertMaterial({ color: 0x555555 }), legs.length);
+    legs.forEach((m, i) => im.setMatrixAt(i, m)); scene.add(im);
   }
   const black = mats.filter(x => !x.white), white = mats.filter(x => x.white);
   for (const [list, mat] of [[black, tireMat], [white, tireMatW]]) {

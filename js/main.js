@@ -1,7 +1,7 @@
 // 核果賽車 3D — 主程式
 import * as THREE from 'three';
 import { PALETTE, createRenderer, createScene, addSky, addClouds, addLights, followShadow, addGround, addMountains, addTrees } from './world.js';
-import { ROAD_HALF, SAMPLES, buildCurve, sampleCurve, nearest, buildRoad, buildGate, placeItems, buildCornerGear, buildBridges } from './track.js';
+import { ROAD_HALF, SAMPLES, buildCurve, sampleCurve, nearest, buildRoad, buildGate, placeItems, syncItems, buildCornerGear, buildBridges } from './track.js';
 import { buildKaohsiung } from './kaohsiung.js';
 import { buildCityRoads, buildBuildings, buildStreetFurniture, buildLandmarks, buildCrosswalks, parkTreeSpots, buildParkedCars, buildParkTrees } from './city.js';
 import { loadModels, MODELS, cullByDistance } from './models.js';
@@ -98,8 +98,9 @@ function resetRace() {
     r.u = idx / SAMPLES; r.lat = lat; r.targetLat = lat;
     r.base = MAX_SPEED * (0.80 + 0.045 * i);
   });
-  for (const n of items.nuts) { n.alive = true; n.mesh.visible = true; }
-  for (const c of items.cones) { c.hit = 0; c.vel = null; c.mesh.rotation.set(0, 0, 0); const p = S.p[c.index], r = S.r[c.index]; c.mesh.position.set(p.x + r.x * c.lat, p.y, p.z + r.z * c.lat); }
+  for (const n of items.nuts) n.alive = true;
+  for (const c of items.cones) { c.hit = 0; c.vel = null; c.rot.set(0, 0, 0); const p = S.p[c.index], r = S.r[c.index]; c.pos.set(p.x + r.x * c.lat, p.y, p.z + r.z * c.lat); }
+  syncItems(items, camera.quaternion, camera.position);
   if (skid) skid.clear();
   raceTime = 0; countdown = 3.99; prevLapTime = 0;
 }
@@ -287,16 +288,16 @@ function updatePlayer(dt) {
   // ----- 道具 -----
   for (const nut of items.nuts) {
     if (!nut.alive) continue;
-    if (nut.mesh.position.distanceToSquared(p.pos) < 2.4 * 2.4) {
-      nut.alive = false; nut.mesh.visible = false;
+    if (nut.pos.distanceToSquared(p.pos) < 2.4 * 2.4) {
+      nut.alive = false;
       p.nuts++; p.boost = Math.max(p.boost, 1.1); p.speed = Math.min(BOOST_MAX, p.speed + 6);
       SFX.nut(); toast('核果 +1');
-      for (let i = 0; i < 22; i++) sparkle.emit(nut.mesh.position, tmpV2.set((Math.random() - .5) * 8, 3 + Math.random() * 5, (Math.random() - .5) * 8), 0.6);
+      for (let i = 0; i < 22; i++) sparkle.emit(nut.pos, tmpV2.set((Math.random() - .5) * 8, 3 + Math.random() * 5, (Math.random() - .5) * 8), 0.6);
     }
   }
   for (const c of items.cones) {
     if (c.hit > 0) continue;
-    if (c.mesh.position.distanceToSquared(p.pos) < 1.9 * 1.9 && p.speed > 6) {
+    if (c.pos.distanceToSquared(p.pos) < 1.9 * 1.9 && p.speed > 6) {
       c.hit = 2.5;
       c.vel = tmpF.clone().multiplyScalar(p.speed * 0.5).add(new THREE.Vector3((Math.random() - .5) * 6, 9, 0));
       c.spin = (Math.random() - .5) * 10;
@@ -451,17 +452,16 @@ function updateItems(dt) {
   for (const n of items.nuts) {
     if (!n.alive) continue;
     n.spin += dt * 2.2;
-    n.mesh.rotation.y = n.spin;
-    n.mesh.position.y = S.p[n.index].y + 1.15 + Math.sin(n.spin * 1.5) * 0.15;
+    n.pos.y = S.p[n.index].y + 1.15 + Math.sin(n.spin * 1.5) * 0.15;
   }
   for (const c of items.cones) {
     if (c.hit <= 0) continue;
     c.hit -= dt;
     c.vel.y -= 25 * dt;
-    c.mesh.position.addScaledVector(c.vel, dt);
-    c.mesh.rotation.x += c.spin * dt; c.mesh.rotation.z += c.spin * 0.7 * dt;
+    c.pos.addScaledVector(c.vel, dt);
+    c.rot.x += c.spin * dt; c.rot.z += c.spin * 0.7 * dt;
     const gy = S.p[c.index].y;
-    if (c.mesh.position.y < gy) { c.mesh.position.y = gy; c.vel.y = Math.abs(c.vel.y) * 0.3; c.vel.x *= 0.6; c.vel.z *= 0.6; }
+    if (c.pos.y < gy) { c.pos.y = gy; c.vel.y = Math.abs(c.vel.y) * 0.3; c.vel.x *= 0.6; c.vel.z *= 0.6; }
   }
   for (const s of items.pads) s.mesh.material.emissiveIntensity = 0.9 + Math.sin(raceTime * 6) * 0.5;
   landmarks.roofNut.rotation.y += dt * 0.6;
@@ -792,6 +792,7 @@ function frame(now) {
   skid.update();
   for (const c of clouds.children) { c.position.x += c.userData.speed * dt * 2; if (c.position.x > 900) c.position.x = -900; }
   updateCamera(dt);
+  syncItems(items, camera.quaternion, camera.position);
   cullByDistance(camera.position);
   followShadow(lights.sun, (gameState === 'title' || gameState === 'loading') ? camera.position : player.pos);
   engineUpdate(Math.min(1, Math.abs(player.speed) / MAX_SPEED), gameState === 'race');
@@ -898,4 +899,6 @@ if (loadEl.tip) loadEl.tip.textContent = '小提示：' + TIPS[Math.floor(Math.r
 boot();
 
 // 除錯口（測試用）：window.__game
-window.__game = { audioState, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); cullByDistance(camera.position); updateHUD(); fx.render(0); } };
+window.__game = { audioState, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
+  // 量 draw call：renderer.info 每次 render 會歸零，後製最後一道只有 1 個 call，所以只量場景那一道
+  measure() { const r = renderer; r.info.autoReset = false; r.info.reset(); r.setRenderTarget(fx.enabled ? fx.rt : null); r.render(scene, camera); const o = { calls: r.info.render.calls, triangles: r.info.render.triangles, pixelRatio: r.getPixelRatio() }; r.info.autoReset = true; r.setRenderTarget(null); return o; } };

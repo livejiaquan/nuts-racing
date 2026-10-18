@@ -1,10 +1,11 @@
 // 城市：照 OpenStreetMap 的左營街道資料畫出其他馬路、街屋、招牌、路燈、蓮池潭、左營車站、核果資訊學苑
 import * as THREE from 'three';
-import { makeCanvasTexture, PALETTE } from './world.js';
+import { makeCanvasTexture, PALETTE, mergeCones } from './world.js';
 import { ROADS } from './osm_data.js';
 import { ROAD_HALF, SAMPLES, makeNutMesh } from './track.js';
 import { excluded } from './zones.js';
 import { MODELS, instanceModel } from './models.js';
+import { mergeGeometries } from '../lib/addons/utils/BufferGeometryUtils.js';
 
 const ROAD_W = { primary: 9, secondary: 8, tertiary: 6.5, residential: 5, unclassified: 4.5, living_street: 4, service: 2.6 };
 export const SIDEWALK = 3.2;
@@ -450,12 +451,13 @@ export function buildLandmarks(scene, S) {
 
   // 半屏山（西北邊的長條山）
   const mMat = new THREE.MeshLambertMaterial({ color: 0x8FBF9F, flatShading: true });
+  const hills = [], tmp = new THREE.Object3D();
   for (let i = 0; i < 9; i++) {
     const h = 70 + Math.random() * 50;
-    const m = new THREE.Mesh(new THREE.ConeGeometry(90 + Math.random() * 40, h, 6), mMat);
-    m.position.set(-1000 + i * 110, h / 2 - 4, -900 + Math.sin(i) * 60); m.rotation.y = Math.random();
-    scene.add(m);
+    tmp.position.set(-1000 + i * 110, h / 2 - 4, -900 + Math.sin(i) * 60); tmp.rotation.y = Math.random(); tmp.updateMatrix();
+    hills.push(new THREE.ConeGeometry(90 + Math.random() * 40, h, 6).toNonIndexed().applyMatrix4(tmp.matrix));
   }
+  scene.add(new THREE.Mesh(mergeCones(hills), mMat));
 
   // 核果資訊學苑：在起點旁邊
   const i0 = 2, p = S.p[i0], r = S.r[i0], t = S.t[i0];
@@ -487,8 +489,11 @@ export function buildLandmarks(scene, S) {
 
 // ---------- 斑馬線：賽道轉進另一條路的地方 ----------
 export function buildCrosswalks(scene, S) {
+  // 全部條紋合成一個幾何、一個 draw call
   const mat = new THREE.MeshBasicMaterial({ color: 0xF4F1E8 });
-  const g = new THREE.Group();
+  const stripeGeo = new THREE.PlaneGeometry(1.0, 3.4);
+  const geos = [];
+  const tmp = new THREE.Object3D();
   let prev = S.name[0];
   for (let i = 1; i < SAMPLES; i++) {
     if (S.name[i] === prev) continue;
@@ -497,13 +502,16 @@ export function buildCrosswalks(scene, S) {
     const p = S.p[idx], r = S.r[idx], t = S.t[idx];
     const kk = Math.floor((S.w[idx] - 0.8) / 1.35);
     for (let k = -kk; k <= kk; k++) {
-      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 3.4), mat);
-      stripe.rotation.x = -Math.PI / 2; stripe.rotation.z = -Math.atan2(t.x, t.z);
-      stripe.position.set(p.x + r.x * k * 1.35, 0.035, p.z + r.z * k * 1.35);
-      g.add(stripe);
+      tmp.rotation.set(-Math.PI / 2, 0, -Math.atan2(t.x, t.z));
+      tmp.position.set(p.x + r.x * k * 1.35, 0.035, p.z + r.z * k * 1.35);
+      tmp.updateMatrix();
+      geos.push(stripeGeo.clone().applyMatrix4(tmp.matrix));
     }
   }
-  scene.add(g);
+  if (!geos.length) return;
+  const merged = mergeGeometries(geos, false);
+  geos.forEach(g => g.dispose());
+  scene.add(new THREE.Mesh(merged, mat));
 }
 
 // ---------- 零星樹：公園與湖邊 ----------
