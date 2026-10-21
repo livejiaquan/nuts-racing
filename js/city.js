@@ -5,6 +5,7 @@ import { ROADS } from './osm_data.js';
 import { ROAD_HALF, SAMPLES, makeNutMesh } from './track.js';
 import { excluded } from './zones.js';
 import { MODELS, instanceModel } from './models.js';
+import { makeWaterMaterial } from './atmos.js';
 import { mergeGeometries } from '../lib/addons/utils/BufferGeometryUtils.js';
 
 const ROAD_W = { primary: 9, secondary: 8, tertiary: 6.5, residential: 5, unclassified: 4.5, living_street: 4, service: 2.6 };
@@ -52,6 +53,7 @@ function segDist(px, pz, ax, az, bx, bz) {
 
 // 所有馬路線段（含賽道），之後擺房子要避開
 export const allSegs = [];
+export const CITY_RUNS = [];   // 背景馬路切好的連續段 [{pts, half}]，給車流用
 export function distToRoads(x, z) {
   let best = Infinity;
   for (const s of allSegs) {
@@ -98,6 +100,7 @@ export function buildCityRoads(scene, S) {
     let run = [];
     const flush = () => {
       if (run.length >= 2) {
+        CITY_RUNS.push({ pts: run.slice(), half });
         walks.push(openStrip(run, half + 2.2, 0.005));   // 人行道
         roads.push(openStrip(run, half, 0.01));          // 柏油
         for (let i = 0; i < run.length - 1; i++) allSegs.push([run[i][0], run[i][1], run[i + 1][0], run[i + 1][1], half + 2.2]);
@@ -424,8 +427,7 @@ export function buildParkTrees(scene, spots) {
 // ---------- 地標 ----------
 export function buildLandmarks(scene, S) {
   // 蓮池潭（在翠華路西側）
-  const lake = new THREE.Mesh(new THREE.CircleGeometry(1, 48),
-    new THREE.MeshStandardMaterial({ color: 0x4FA3D1, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.92 }));
+  const lake = new THREE.Mesh(new THREE.CircleGeometry(1, 48), makeWaterMaterial(0x4FA3D1, 580, 860));   // 會流動、會反射天空的湖
   lake.rotation.x = -Math.PI / 2; lake.scale.set(290, 430, 1); lake.position.set(-800, 0.02, -60);
   scene.add(lake);
   // 龍虎塔：兩座小塔

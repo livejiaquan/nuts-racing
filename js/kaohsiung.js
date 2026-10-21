@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { makeCanvasTexture, PALETTE, mergeCones } from './world.js';
 import { RIVER, RIVER_W } from './zones.js';
+import { makeWaterMaterial, ATMOS } from './atmos.js';
 
 function lam(color) { return new THREE.MeshLambertMaterial({ color }); }
 function box(w, h, d, mat, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; return m; }
@@ -51,7 +52,7 @@ function tuntex(scene, x, z) {
   // 裙樓
   g.add(box(130, 16, 90, lam(0xC9CED4), 0, 8, 0));
   const s = label('85 大樓', '#1F3A5A', 60, 12, 80); s.position.set(0, 24, 46); g.add(s);
-  g.position.set(x, 0, z);
+  g.position.set(x, 0, z); g.userData.occluder = true; ATMOS.occluders.push(g);
   scene.add(g);
 }
 
@@ -71,13 +72,12 @@ function musicCenter(scene, x, z) {
     m.position.set(-50 + i * 13, h / 2, 48); g.add(m);
   }
   const s = label('高雄流行音樂中心', '#2F6FB0', 46, 9, 56); s.position.set(0, 12, -48); g.add(s);
-  g.position.set(x, 0, z); scene.add(g);
+  g.position.set(x, 0, z); ATMOS.occluders.push(g); scene.add(g);
 }
 
 // ---------- 高雄港：海、貨櫃、橋式起重機、燈塔 ----------
 function harbor(scene) {
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(640, 440),
-    new THREE.MeshStandardMaterial({ color: 0x3E8FC2, roughness: 0.2, metalness: 0.05 }));
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(640, 440), makeWaterMaterial(0x3E8FC2, 640, 440));   // 會流動、會反射天空的海
   sea.rotation.x = -Math.PI / 2; sea.position.set(465, 0.0, -765); scene.add(sea);
   // 碼頭岸壁
   scene.add(box(640, 2, 20, lam(0xA8A49A), 465, 0.5, -555));
@@ -157,7 +157,7 @@ function arena(scene, x, z) {
   dome.scale.set(1, 0.5, 1); dome.position.y = 12; g.add(dome);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(76, 1.6, 8, 48), lam(0x1F5FBF)); ring.rotation.x = Math.PI / 2; ring.position.y = 13; g.add(ring);
   const s = label('高雄巨蛋', '#1F5FBF', 50, 10, 70); s.position.set(0, 10, 82); g.add(s);
-  g.position.set(x, 0, z); g.traverse(o => { if (o.isMesh) o.castShadow = true; }); scene.add(g);
+  g.position.set(x, 0, z); g.traverse(o => { if (o.isMesh) o.castShadow = true; }); ATMOS.occluders.push(g); scene.add(g);
 }
 
 // ---------- 美麗島站 光之穹頂 ----------
@@ -187,9 +187,13 @@ function loveRiver(scene) {
       pos.push(p[0] - rx * half, y, p[1] - rz * half, p[0] + rx * half, y, p[1] + rz * half);
       if (i < n - 1) { const q = i * 2; idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
     }
+    // uv：u 橫跨河面、v 沿河每公尺（水面的法線貼圖要有 uv 才貼得上）
+    const uv = []; let dist = 0;
+    for (let i = 0; i < n; i++) { if (i) dist += Math.hypot(RIVER[i][0] - RIVER[i - 1][0], RIVER[i][1] - RIVER[i - 1][1]); uv.push(0, dist, 1, dist); }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: rough < 0.5 ? 0.1 : 0 }));
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    const water = rough < 0.5;
+    const m = new THREE.Mesh(geo, water ? makeWaterMaterial(color, half * 2, 1) : new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0 }));
     m.receiveShadow = true; return m;
   };
   scene.add(strip(RIVER_W / 2 + 9, 0.012, 0xCFC8B8, 0.9));   // 河岸步道

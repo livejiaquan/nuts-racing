@@ -135,9 +135,10 @@ export function addLights(scene) {
   return { hemi, sun };
 }
 
-// 影子相機跟著車走，才不會整張地圖都要算影子
-export function followShadow(sun, target) {
-  sun.position.set(target.x - 120, 180, target.z - 80);
+// 影子相機跟著車走，才不會整張地圖都要算影子；sunDir 是太陽方向（白天／黃昏不同）
+export function followShadow(sun, target, sunDir = null) {
+  if (sunDir) sun.position.copy(target).addScaledVector(sunDir, 230);
+  else sun.position.set(target.x - 120, 180, target.z - 80);
   sun.target.position.copy(target);
   sun.target.updateMatrixWorld();
 }

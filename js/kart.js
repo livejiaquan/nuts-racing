@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { PALETTE } from './world.js';
 import { mergeGeometries } from '../lib/addons/utils/BufferGeometryUtils.js';
+import { registerEnv } from './atmos.js';
 
 export const KART_COLORS = [
   { name: '核果橘', hex: 0xE8743B },
@@ -13,7 +14,7 @@ export const KART_COLORS = [
 ];
 
 const black = new THREE.MeshStandardMaterial({ color: 0x1B1B1B, roughness: 0.9 });
-const metal = new THREE.MeshStandardMaterial({ color: 0xBFC4CC, roughness: 0.35, metalness: 0.7 });
+const metal = registerEnv(new THREE.MeshStandardMaterial({ color: 0xBFC4CC, roughness: 0.3, metalness: 0.85 }), 1.0);
 const fur = new THREE.MeshStandardMaterial({ color: 0xD98A41, roughness: 0.85 });
 const furDark = new THREE.MeshStandardMaterial({ color: 0xB5651D, roughness: 0.85 });
 const furLight = new THREE.MeshStandardMaterial({ color: 0xF2C994, roughness: 0.9 });
@@ -78,7 +79,10 @@ export function buildKart(colorHex) {
   shell.push(mesh(new THREE.BoxGeometry(0.12, 0.6, 0.5), bodyDark, 0.9, 1.15, -1.75));
   // 車號牌
   shell.push(mesh(new THREE.BoxGeometry(0.9, 0.5, 0.06), new THREE.MeshStandardMaterial({ color: 0xFDF6E3 }), 0, 1.0, -2.0));
-  g.add(mergeParts(shell, { roughness: 0.45, metalness: 0.15 }));
+  // 車漆：金屬感高一點、粗糙度低一點，再加天空的環境反射，才像烤漆
+  const shellMesh = mergeParts(shell, { roughness: 0.3, metalness: 0.5 });
+  registerEnv(shellMesh.material, 0.8);
+  g.add(shellMesh);
   // 排氣管
   for (const x of [-0.45, 0.45]) {
     const ex = mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.7, 8), metal, x, 0.62, -1.95);

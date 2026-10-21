@@ -3,8 +3,10 @@ import * as THREE from 'three';
 import { PALETTE, createRenderer, createScene, addSky, addClouds, addLights, followShadow, addGround, addMountains, addTrees } from './world.js';
 import { ROAD_HALF, SAMPLES, buildCurve, sampleCurve, nearest, buildRoad, buildGate, placeItems, syncItems, buildCornerGear, buildBridges } from './track.js';
 import { buildKaohsiung } from './kaohsiung.js';
-import { buildCityRoads, buildBuildings, buildStreetFurniture, buildLandmarks, buildCrosswalks, parkTreeSpots, buildParkedCars, buildParkTrees } from './city.js';
-import { loadModels, MODELS, cullByDistance, buildChunks } from './models.js';
+import { buildCityRoads, buildBuildings, buildStreetFurniture, buildLandmarks, buildCrosswalks, parkTreeSpots, buildParkedCars, buildParkTrees, CITY_RUNS } from './city.js';
+import { loadModels, MODELS, cullByDistance, buildChunks, CHUNKS } from './models.js';
+import { buildAtmosphere, setTimeOfDay, ATMOS, PRESETS, sunOnScreen, updateWater } from './atmos.js';
+import { buildTraffic, updateTraffic } from './traffic.js';
 import { ROADS } from './osm_data.js';
 import { KART_COLORS, buildKart, animateKart } from './kart.js';
 import * as MBit from './microbit.js';
@@ -814,20 +816,28 @@ function frame(now) {
   flame.update(dt); dust.update(dt); sparkle.update(dt); smoke.update(dt); sparkB.update(dt); sparkO.update(dt);
   skid.update();
   for (const c of clouds.children) { c.position.x += c.userData.speed * dt * 2; if (c.position.x > 900) c.position.x = -900; }
+  updateTraffic(dt); updateWater(dt);
   updateCamera(dt);
   syncItems(items, camera.quaternion, camera.position);
   const shadowAt = (gameState === 'title' || gameState === 'loading') ? camera.position : player.pos;
   cullByDistance(camera.position, shadowAt);
-  followShadow(lights.sun, shadowAt);
+  followShadow(lights.sun, shadowAt, ATMOS.sunDir);
   engineUpdate(Math.min(1, Math.abs(player.speed) / MAX_SPEED), gameState === 'race');
   skidUpdate(gameState === 'race' && (player.drift !== 0 || (Math.abs(player.steer) > 0.55 && player.speed > MAX_SPEED * 0.55) || (player.braking && player.speed > 20)) && !player.offroad);
   if (gameState !== 'title') updateHUD(); else { el.mbState.textContent = MBit.MB.status; el.mbBtn.textContent = MBit.MB.connected ? '中斷連線' : '連接 micro:bit'; }
 
   updateDynamicRes(rawDt);
 
-  fx.render(player.boost > 0 ? Math.min(1, player.boost) : 0);
+  // 後製參數：速度感只在比賽中、夠快才出現；太陽位置給鏡頭光暈
+  const sp = gameState === 'race' ? Math.abs(player.speed) / MAX_SPEED : 0;
+  const speedTarget = Math.min(1, THREE.MathUtils.smoothstep(sp, 0.7, 1.0) * 0.8 + (gameState === 'race' && player.boost > 0 ? 0.5 : 0));
+  fxSpeed += (speedTarget - fxSpeed) * Math.min(1, dt * 5);
+  sunOnScreen(camera, sunVec);
+  fx.render({ boostGlow: player.boost > 0 ? Math.min(1, player.boost) : 0, speed: fxSpeed, time: now / 1000, sun: sunVec, tint: PRESETS[ATMOS.preset].tint });
   requestAnimationFrame(frame);
 }
+let fxSpeed = 0;
+const sunVec = new THREE.Vector3(0.5, 0.5, 0);
 
 // ---------- 開機：分段建場景，進度條有東西動 ----------
 const KENNEY = (() => {
@@ -854,12 +864,16 @@ async function boot() {
 async function bootStages() {
   await stage(3, '載入模型（Kenney，CC0）', null);
   await loadModels(KENNEY, (f) => { if (loadEl.bar) loadEl.bar.style.width = (3 + f * 30) + '%'; });
-  await stage(34, '天空與光線', () => { addSky(scene); clouds = addClouds(scene, 22); lights = addLights(scene); addGround(scene); addMountains(scene); });
+  await stage(34, '天空與光線', () => {
+    buildAtmosphere(scene, renderer); clouds = addClouds(scene, 22); lights = addLights(scene); addGround(scene);
+    ATMOS.occluders.push(addMountains(scene));
+    setTimeOfDay(timeOfDay, { scene, renderer, lights, clouds });
+  });
   await stage(40, '鋪賽道', () => { const curve = buildCurve(); S = sampleCurve(curve); buildRoad(S, scene); buildGate(S, scene); });
-  await stage(48, '畫左營的馬路', () => { buildCityRoads(scene, S); buildCrosswalks(scene, S); });
+  await stage(48, '畫左營的馬路', () => { buildCityRoads(scene, S); buildCrosswalks(scene, S); buildTraffic(scene, CITY_RUNS, S); });
   await stage(60, '蓋街屋與招牌', () => { buildBuildings(scene, S); buildStreetFurniture(scene, S); buildParkedCars(scene, S); });
   await stage(68, '彎道、高架、橋', () => { buildCornerGear(S, scene); buildBridges(S, scene); });
-  await stage(76, '85 大樓、港口、愛河', () => { buildKaohsiung(scene, S); landmarks = buildLandmarks(scene, S); const spots = parkTreeSpots(S); if (!buildParkTrees(scene, spots)) addTrees(scene, spots);  buildChunks(scene); });
+  await stage(76, '85 大樓、港口、愛河', () => { buildKaohsiung(scene, S); landmarks = buildLandmarks(scene, S); const spots = parkTreeSpots(S); if (!buildParkTrees(scene, spots)) addTrees(scene, spots);  buildChunks(scene); for (const c of CHUNKS) ATMOS.occluders.push(c); });
   await stage(84, '放核果與道具', () => {
     items = placeItems(S, scene);
     flame = new Particles(140, 0xFFB347, 0.9); dust = new Particles(160, 0xC9B98A, 1.1); sparkle = new Particles(80, 0xFFF1A8, 0.7); smoke = new Particles(160, 0xE8E6E0, 1.6);
@@ -894,6 +908,18 @@ document.getElementById('btn-again').addEventListener('click', startRace);
 document.getElementById('btn-title').addEventListener('click', backToTitle);
 document.getElementById('btn-quality').addEventListener('click', () => { setQuality(quality === 'high' ? 'low' : 'high'); dyn.slow = 0; });
 
+// 時段：白天／黃昏（記在這台電腦）
+let timeOfDay = 'day';
+try { timeOfDay = PRESETS[localStorage.getItem('nuts-racing-time')] ? localStorage.getItem('nuts-racing-time') : 'day'; } catch (e) {}
+function applyTimeOfDay(name) {
+  timeOfDay = name;
+  const P = setTimeOfDay(name, { scene, renderer, lights, clouds });
+  document.getElementById('btn-time').textContent = '時段：' + P.label;
+  try { localStorage.setItem('nuts-racing-time', name); } catch (e) {}
+}
+document.getElementById('btn-time').textContent = '時段：' + (PRESETS[timeOfDay] || PRESETS.day).label;
+document.getElementById('btn-time').addEventListener('click', () => { applyTimeOfDay(timeOfDay === 'day' ? 'dusk' : 'day'); SFX.click(); });
+
 const ONLINE = location.protocol === 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 if (ONLINE) {
   document.getElementById('mb-hint').textContent = '傾斜轉彎，B 油門、A 煞車。Chrome／Edge 按「連接 micro:bit」選 mbed Serial Port（最簡單）。電腦有跑橋接程式的話也可以按「用橋接程式連」。板子要先燒好程式（標題畫面有下載）。';
@@ -919,6 +945,6 @@ if (loadEl.tip) loadEl.tip.textContent = '小提示：' + TIPS[Math.floor(Math.r
 boot();
 
 // 除錯口（測試用）：window.__game
-window.__game = { audioState, dyn, applyPixelRatio, updateDynamicRes, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
+window.__game = { audioState, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
   // 量 draw call：renderer.info 每次 render 會歸零，後製最後一道只有 1 個 call，所以只量場景那一道
   measure() { const r = renderer; r.info.autoReset = false; r.info.reset(); r.setRenderTarget(fx.enabled ? fx.rt : null); r.render(scene, camera); const o = { calls: r.info.render.calls, triangles: r.info.render.triangles, pixelRatio: r.getPixelRatio() }; r.info.autoReset = true; r.setRenderTarget(null); return o; } };

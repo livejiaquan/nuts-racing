@@ -71,6 +71,13 @@ function roadTexture() {
       g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.12)';
       g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
     }
+    // 輪胎常壓的地方比較深（兩個車道各兩條），再灑幾塊油漬，路面才不會像塑膠
+    g.fillStyle = 'rgba(0,0,0,0.09)';
+    for (const u of [0.17, 0.33, 0.67, 0.83]) g.fillRect(u * w - 11, 0, 22, h);
+    for (let i = 0; i < 6; i++) {
+      g.fillStyle = 'rgba(0,0,0,' + (0.06 + Math.random() * 0.08) + ')';
+      g.beginPath(); g.ellipse(Math.random() * w, Math.random() * h, 6 + Math.random() * 14, 10 + Math.random() * 30, Math.random() * 3, 0, 7); g.fill();
+    }
     // 兩側白線
     g.fillStyle = '#FFFFFF';
     g.fillRect(8, 0, 7, h); g.fillRect(w - 15, 0, 7, h);
@@ -78,6 +85,29 @@ function roadTexture() {
     g.fillStyle = '#FDF6E3';
     g.fillRect(w / 2 - 4, 40, 8, 200);
   });
+}
+
+// 柏油的凹凸：用雜訊算一張法線貼圖，太陽低角度照過來路面會有顆粒的反光
+function asphaltNormal() {
+  const N = 128, h = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) h[i] = Math.random();
+  // 平滑一次，顆粒大小約 2 個像素
+  const s = new Float32Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let v = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) v += h[((y + dy + N) % N) * N + ((x + dx + N) % N)];
+    s[y * N + x] = v / 9;
+  }
+  const data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const l = s[y * N + ((x - 1 + N) % N)], r = s[y * N + ((x + 1) % N)], u = s[((y - 1 + N) % N) * N + x], d = s[((y + 1) % N) * N + x];
+    const nx = (l - r) * 3.0, ny = (u - d) * 3.0, nz = 1, len = Math.hypot(nx, ny, nz);
+    const i = (y * N + x) * 4;
+    data[i] = (nx / len * 0.5 + 0.5) * 255; data[i + 1] = (ny / len * 0.5 + 0.5) * 255; data[i + 2] = (nz / len * 0.5 + 0.5) * 255; data[i + 3] = 255;
+  }
+  const t = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true;
+  return t;
 }
 
 export function buildRoad(S, scene) {
@@ -106,7 +136,10 @@ export function buildRoad(S, scene) {
   geo.computeVertexNormals();
   const tex = roadTexture();
   tex.wrapS = THREE.ClampToEdgeWrapping; tex.wrapT = THREE.RepeatWrapping;
-  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  // 路面改用 PBR 材質：法線貼圖的顆粒 + 粗糙度 0.8，太陽角度低時路面會有一層淡淡的反光（真車遊戲的路都這樣）
+  const nrm = asphaltNormal();
+  nrm.repeat.set(5, 4);   // 橫向 22 公尺切 5 格、縱向每 18 公尺切 4 格，顆粒大約 4.5 公尺一輪、裡面有 128 顆
+  const mat = new THREE.MeshStandardMaterial({ map: tex, normalMap: nrm, normalScale: new THREE.Vector2(0.35, 0.35), roughness: 0.8, metalness: 0.0 });
   const road = new THREE.Mesh(geo, mat);
   road.receiveShadow = true;
   scene.add(road);
