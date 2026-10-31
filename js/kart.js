@@ -116,14 +116,17 @@ export function buildKart(colorHex, { style = 'kart' } = {}) {
   const shellMesh = mergeParts(shell, { roughness: 0.3, metalness: 0.5 });
   registerEnv(shellMesh.material, 0.8);
   g.add(shellMesh);
-  // 排氣管
-  const tailZ = style === 'sport' ? -2.15 : style === 'bus' ? -1.95 : -1.95;
-  for (const x of [-0.45, 0.45]) { const ex = mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.7, 8), metal, x, 0.62 + r, tailZ); ex.rotation.x = Math.PI / 2; g.add(ex); }
-  // 座椅與方向盤（小巴的在車廂裡，從外面看不太到，也照放）
+  // 排氣管、方向盤柱（金屬）＋座椅、方向盤（黑）：不會動，合成一個 mesh（省 4 個 draw call）
+  const tailZ = style === 'sport' ? -2.15 : -1.95;
   const seat = st.seat;
-  g.add(mesh(new THREE.BoxGeometry(1.0, 0.7, 0.3), black, 0, seat[1] + 0.15, seat[2] - 0.65));
-  const wheelRing = mesh(new THREE.TorusGeometry(0.32, 0.05, 8, 16), black, 0, seat[1] + 0.2, seat[2] + 1.0); wheelRing.rotation.x = -Math.PI / 3; g.add(wheelRing);
-  const col = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 6), metal, 0, seat[1], seat[2] + 1.2); col.rotation.x = Math.PI / 3; g.add(col);
+  const trim = [];
+  for (const x of [-0.45, 0.45]) { const ex = mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.7, 8), metal, x, 0.62 + r, tailZ); ex.rotation.x = Math.PI / 2; trim.push(ex); }
+  trim.push(mesh(new THREE.BoxGeometry(1.0, 0.7, 0.3), black, 0, seat[1] + 0.15, seat[2] - 0.65));
+  const wheelRing = mesh(new THREE.TorusGeometry(0.32, 0.05, 8, 16), black, 0, seat[1] + 0.2, seat[2] + 1.0); wheelRing.rotation.x = -Math.PI / 3; trim.push(wheelRing);
+  const col = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 6), metal, 0, seat[1], seat[2] + 1.2); col.rotation.x = Math.PI / 3; trim.push(col);
+  const trimMesh = mergeParts(trim, { roughness: 0.45, metalness: 0.5 });
+  registerEnv(trimMesh.material, 0.6);
+  g.add(trimMesh);
   // 尾燈（煞車會亮）
   const lightMat = new THREE.MeshStandardMaterial({ color: 0xFF2A2A, emissive: 0xFF1E1E, emissiveIntensity: 0.15, roughness: 0.4 });
   const lz = style === 'sport' ? -1.96 : style === 'bus' ? -1.77 : -1.76, ly = (style === 'bus' ? 0.75 : 0.62) + r;
@@ -132,15 +135,19 @@ export function buildKart(colorHex, { style = 'kart' } = {}) {
   brakeGlow.scale.set(3.2, 1.2, 1); brakeGlow.position.set(0, ly, lz - 0.25); g.add(brakeGlow);
 
   // 輪子
+  // 輪胎＋輪轂合成一個 mesh（四個輪子共用同一份幾何），每台車省 4 個 draw call
   const wheelGeo = new THREE.CylinderGeometry(st.wheelR, st.wheelR, st.wheelW, 14);
   const hubGeo = new THREE.CylinderGeometry(st.wheelR * 0.55, st.wheelR * 0.55, st.wheelW + 0.02, 8);
+  const w0 = mesh(wheelGeo, black); w0.rotation.z = Math.PI / 2;
+  const h0 = mesh(hubGeo, metal); h0.rotation.z = Math.PI / 2;
+  const wheelMesh = mergeParts([w0, h0], { roughness: 0.6, metalness: 0.35 });
+  wheelGeo.dispose(); hubGeo.dispose();
   const wheels = [], front = [];
   for (const [x, z, isFront] of [[-1.15, 1.2, true], [1.15, 1.2, true], [-1.2, -1.2, false], [1.2, -1.2, false]]) {
     const pivot = new THREE.Group();
     pivot.position.set(x, st.wheelR, z);
-    const w = mesh(wheelGeo, black); w.rotation.z = Math.PI / 2;
-    const h = mesh(hubGeo, metal); h.rotation.z = Math.PI / 2;
-    const spin = new THREE.Group(); spin.add(w, h);
+    const w = new THREE.Mesh(wheelMesh.geometry, wheelMesh.material); w.castShadow = true; w.receiveShadow = true;
+    const spin = new THREE.Group(); spin.add(w);
     pivot.add(spin);
     g.add(pivot);
     wheels.push(spin);

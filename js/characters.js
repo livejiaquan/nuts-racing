@@ -130,5 +130,6 @@ export function buildCharacter(id, face = false) {
   const c = b(face);
   c.group.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; } });
   if (c.face) for (const k of ['browL', 'browR', 'smile', 'mouthO', 'sweat']) c.face[k].castShadow = false;
+  c.builtIn = true;   // 內建角色：換掉時可以把幾何釋放掉（上傳的模型不是）
   return c;
 }

@@ -607,7 +607,7 @@ function banana() {
   const m = makeBanana(); m.position.copy(player.pos).addScaledVector(tmpF, -3.5); m.rotation.y = Math.random() * 6;
   scene.add(m);
   hazards.bananas.push({ mesh: m, pos: m.position.clone(), life: 40, owner: raceTime });
-  if (hazards.bananas.length > 8) { const old = hazards.bananas.shift(); scene.remove(old.mesh); }
+  if (hazards.bananas.length > 8) { const old = hazards.bananas.shift(); scene.remove(old.mesh); disposeObj(old.mesh); }
 }
 // 飛彈：從車頭沿著賽道中心線往前飛 2.5 秒，打到第一台對手就讓它轉圈變慢。回傳前面 80 公尺內有沒有目標
 function missile() {
@@ -618,9 +618,13 @@ function missile() {
   for (const r of rivals) { const d = ((Math.floor(r.u * SAMPLES) - n.index) % SAMPLES + SAMPLES) % SAMPLES; if (d > 0 && d < 60) target = true; }
   return target;
 }
+// 把一個 Object3D 底下的幾何與材質都釋放掉（不釋放共用的貼圖）
+function disposeObj(o) {
+  o.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose()); });
+}
 function clearHazards() {
-  for (const b of hazards.bananas) scene.remove(b.mesh);
-  for (const m of hazards.missiles) scene.remove(m.mesh);
+  for (const b of hazards.bananas) { scene.remove(b.mesh); disposeObj(b.mesh); }
+  for (const m of hazards.missiles) { scene.remove(m.mesh); disposeObj(m.mesh); }
   hazards.bananas.length = 0; hazards.missiles.length = 0;
 }
 function updateHazards(dt) {
@@ -633,7 +637,7 @@ function updateHazards(dt) {
     if (!gone && raceTime - b.owner > 2 && p.shield <= 0 && p.big <= 0 && b.pos.distanceToSquared(p.pos) < 2.0 * 2.0 && p.speed > 6) {
       p.speed *= 0.5; p.spin = 0.45; p.boost = 0; shake = 0.5; p.drift = 0; SFX.cone(); toast('踩到自己的香蕉皮！'); setMood('ouch', 1.3); gone = true;
     }
-    if (gone) { scene.remove(b.mesh); hazards.bananas.splice(i, 1); }
+    if (gone) { scene.remove(b.mesh); disposeObj(b.mesh); hazards.bananas.splice(i, 1); }
   }
   for (let i = hazards.missiles.length - 1; i >= 0; i--) {
     const m = hazards.missiles[i];
@@ -646,7 +650,7 @@ function updateHazards(dt) {
     let hit = false;
     for (const r of rivals) if (r.pos.distanceToSquared(m.mesh.position) < 2.6 * 2.6) { r.spinT = 1.3; r.bump = 1.4; say(r, pick(['被打到了！', '哎呀', '痛'])); hit = true; break; }
     if (hit) { SFX.cone(); shake = Math.max(shake, 0.2); for (let k = 0; k < 24; k++) sparkO.emit(m.mesh.position, tmpV2.set((Math.random() - .5) * 8, 2 + Math.random() * 5, (Math.random() - .5) * 8), 0.6, -8); }
-    if (hit || m.life <= 0) { scene.remove(m.mesh); hazards.missiles.splice(i, 1); }
+    if (hit || m.life <= 0) { scene.remove(m.mesh); disposeObj(m.mesh); hazards.missiles.splice(i, 1); }
   }
 }
 function usePowerup(pu) {
@@ -934,7 +938,7 @@ function drawFaceCam() {
   if (!show) return;
   const r = renderer;
   face.tick++;
-  if (face.tick % 2 === 0) {
+  if (face.tick % (quality === 'high' ? 2 : 4) === 0) {
     forwardOf(player.heading, tmpF);
     const hy = player.kart.driver.position.y + 1.0;   // 角色頭的高度：座位高度加一點
     faceCam.position.copy(player.pos).addScaledVector(tmpF, 2.9).addScaledVector(UP, hy - 0.05);
@@ -1040,7 +1044,7 @@ function overlayOpen() { return startDlgOpen() || !el.settings.classList.contain
 function closeOverlays() {
   let closed = false;
   if (startDlgOpen()) { el.startDlg.classList.add('hide'); closed = true; }
-  if (!el.settings.classList.contains('hide')) { el.settings.classList.add('hide'); closed = true; }
+  if (!el.settings.classList.contains('hide')) { el.settings.classList.add('hide'); closed = true; if (paused) pauseEl.classList.remove('hide'); }
   if (el.board.classList.contains('open')) { el.board.classList.remove('open'); closed = true; }
   return closed;
 }
@@ -1179,6 +1183,9 @@ function buildSwatches() {
 // 顏色或車款變了：把玩家的車整台重建，位置、角色照舊
 function rebuildPlayer() {
   scene.remove(player.kart.group);
+  player.kart.group.remove(shieldMesh);
+  if (player.kart.character && player.kart.character.builtIn) disposeObj(player.kart.character.group);
+  player.kart.driver.clear(); disposeObj(player.kart.group);
   const old = player;
   player = makeRacer(KART_COLORS[sel.color].hex, currentKart());
   player.kart.group.add(shieldMesh);
@@ -1248,7 +1255,9 @@ function applyDriverSize() {
 function applyDriver() {
   if (!player) return;
   const ch = currentCharacter(), kart = currentKart();
+  const old = player.kart.character;
   setCharacter(player.kart, ch.build({ driverGroup: driver.group, face: true }));
+  if (old && old.builtIn) disposeObj(old.group);
   player.tune = tuneFrom(totalStats(ch, kart));
 }
 function driverStatus(text) { drvEl.name.textContent = text; }
@@ -1490,7 +1499,12 @@ document.getElementById('btn-again').addEventListener('click', startRace);
 document.getElementById('btn-title').addEventListener('click', backToTitle);
 
 // ---------- 設定頁 ----------
-function openSettings() { if (gameState !== 'title' && gameState !== 'done' && !paused) return; closeOverlays(); el.settings.classList.remove('hide'); SFX.click(); }
+function openSettings() {
+  if (gameState !== 'title' && gameState !== 'done' && !paused) return;
+  closeOverlays();
+  if (paused) pauseEl.classList.add('hide');   // 設定頁疊不過暫停選單，先把選單收起來
+  el.settings.classList.remove('hide'); SFX.click();
+}
 
 // ---------- 暫停：Esc 或 P，HUD 右上也有一顆 ----------
 let paused = false;
@@ -1511,7 +1525,7 @@ document.getElementById('pause-restart').addEventListener('click', () => { toggl
 document.getElementById('pause-settings').addEventListener('click', openSettings);
 document.getElementById('pause-title').addEventListener('click', () => { togglePause(false); backToTitle(); });
 pauseEl.addEventListener('click', e => { if (e.target === pauseEl) togglePause(false); });
-document.getElementById('btn-settings-close').addEventListener('click', () => { el.settings.classList.add('hide'); SFX.click(); });
+document.getElementById('btn-settings-close').addEventListener('click', () => { closeOverlays(); SFX.click(); });
 onSeg('seg-sound', v => { setMuted(v === 'off'); setSeg('seg-sound', v); }); setSeg('seg-sound', isMuted() ? 'off' : 'on');
 onSeg('seg-quality', q => { setQuality(q); dyn.slow = 0; }); setSeg('seg-quality', quality);
 onSeg('seg-face', v => { faceOn = v === 'on'; setSeg('seg-face', v); try { localStorage.setItem(FACE_KEY, v); } catch (e) {} }); setSeg('seg-face', faceOn ? 'on' : 'off');
