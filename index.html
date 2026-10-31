@@ -79,6 +79,12 @@
   .swatch:hover { transform:scale(1.1); }
   .swatch.on { border-color:var(--cream); transform:scale(1.18); box-shadow:0 0 0 3px var(--forest-deep), 0 0 16px rgba(253,246,227,.5); }
   #color-name { font-size:14px; opacity:.9; min-width:64px; }
+  #driver-row { flex-wrap:wrap; }
+  #driver-row .btn.ghost { font-size:13px; padding:6px 12px; }
+  #driver-tools { display:inline-flex; align-items:center; gap:6px; }
+  #driver-tools[hidden] { display:none; }
+  #driver-color { width:34px; height:30px; border:2px solid rgba(253,246,227,.45); border-radius:8px; background:none; padding:2px; cursor:pointer; }
+  #driver-name { flex-basis:100%; }
   .start-row { display:flex; align-items:center; gap:16px; margin-top:4px; }
   .link { color:var(--gold); font-weight:700; text-decoration:none; border-bottom:1.5px dashed rgba(242,183,5,.6); font-size:14px; }
   .link:hover { border-bottom-style:solid; }
@@ -227,6 +233,17 @@
     <div class="card start-card">
       <div class="field"><span class="label">名字</span><input id="player-name" maxlength="12" placeholder="輸入名字，時間會記在排行榜"></div>
       <div class="field"><span class="label">車色</span><div id="swatches"></div><span id="color-name"></span></div>
+      <div class="field" id="driver-row"><span class="label">駕駛</span>
+        <button class="btn ghost" id="btn-driver">上傳我的角色</button>
+        <input type="file" id="driver-file" accept=".obj,.stl,.glb,.gltf" hidden>
+        <span id="driver-tools" hidden>
+          <input type="color" id="driver-color" value="#D98A41" title="模型沒有自帶顏色時用這個顏色">
+          <button class="btn ghost" id="btn-driver-flip" title="模型躺著的話按這個">翻</button>
+          <button class="btn ghost" id="btn-driver-turn" title="轉 90 度">轉</button>
+          <button class="btn ghost" id="btn-driver-clear">用回松鼠</button>
+        </span>
+        <span id="driver-name" class="tiny">預設是松鼠。可以放自己做的 .obj／.stl／.glb</span>
+      </div>
       <div class="start-row">
         <button class="btn big" id="btn-start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>開始比賽</button>
         <a id="hex-link" class="link" href="microbit程式/方向盤.hex" download="核果賽車_方向盤.hex">下載 micro:bit 程式 (.hex)</a>

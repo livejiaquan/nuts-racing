@@ -153,8 +153,20 @@ export function buildKart(colorHex) {
   blob.rotation.x = -Math.PI / 2; blob.position.y = 0.04; blob.renderOrder = 1;
   g.add(blob);
 
-  return { group: g, wheels, front, squirrel: sq, tail, lightMat, brakeGlow, blob, color: new THREE.Color(colorHex),
+  // 自訂角色的位置（和松鼠同一個座位）；setDriver() 放東西進來時松鼠就藏起來
+  const driver = new THREE.Group();
+  driver.position.copy(sq.position);
+  g.add(driver);
+
+  return { group: g, wheels, front, squirrel: sq, tail, driver, lightMat, brakeGlow, blob, color: new THREE.Color(colorHex),
     rearWheels: [new THREE.Vector3(-1.2, 0, -1.2), new THREE.Vector3(1.2, 0, -1.2)] };
+}
+
+// 換駕駛：group 是已經 fitDriver 過的自訂角色，null 就換回松鼠
+export function setDriver(k, group) {
+  k.driver.clear();
+  if (group) k.driver.add(group);
+  k.squirrel.visible = !group;
 }
 
 // 輪子轉、前輪跟著方向、尾巴晃、車身依轉向傾斜
@@ -167,5 +179,6 @@ export function animateKart(k, speed, steer, dt, t, braking = false) {
   for (const w of k.wheels) w.rotation.x += speed * dt / 0.48;
   for (const f of k.front) f.rotation.y = -steer * 0.45;
   k.squirrel.rotation.z = steer * 0.18;
+  if (k.driver) k.driver.rotation.z = steer * 0.18;
   k.tail.rotation.x = Math.sin(t * 9) * 0.12 * (0.3 + Math.min(1, Math.abs(speed) / 20));
 }

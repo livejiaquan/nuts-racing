@@ -8,7 +8,8 @@ import { loadModels, MODELS, cullByDistance, buildChunks, CHUNKS } from './model
 import { buildAtmosphere, setTimeOfDay, ATMOS, PRESETS, sunOnScreen, updateWater } from './atmos.js';
 import { buildTraffic, updateTraffic } from './traffic.js';
 import { ROADS } from './osm_data.js';
-import { KART_COLORS, buildKart, animateKart } from './kart.js';
+import { KART_COLORS, buildKart, animateKart, setDriver } from './kart.js';
+import { parseDriver, fitDriver, guessRot, saveDriver, loadSavedDriver, clearSavedDriver } from './driver.js';
 import * as MBit from './microbit.js';
 import { SFX, engineStart, engineUpdate, bgmStart, bgmSet, setMuted, isMuted, skidUpdate, audioState } from './audio.js';
 import { PostFX } from './fx.js';
@@ -736,6 +737,48 @@ function setPlayerColor(i) {
   player.pos.copy(old.pos); player.heading = old.heading; player.hint = old.hint;
   player.kart.group.position.copy(player.pos); player.kart.group.rotation.y = player.heading;
   buildSwatches();
+  applyDriver();
+}
+
+// ---------- 自訂角色（學生上傳的 OBJ／STL／GLB 坐在駕駛座） ----------
+const driver = { group: null, colorMats: [], rec: null };   // rec = { name, buffer, color, rot }
+const drvEl = { btn: document.getElementById('btn-driver'), file: document.getElementById('driver-file'), tools: document.getElementById('driver-tools'), color: document.getElementById('driver-color'), name: document.getElementById('driver-name') };
+function applyDriver() { if (player) setDriver(player.kart, driver.group); }
+function driverStatus(text) { drvEl.name.textContent = text; }
+async function useDriver(rec, persist) {
+  const { inner, tris, colorMats } = await parseDriver(rec.name, rec.buffer, rec.color);
+  if (!rec.rot) rec.rot = guessRot(inner, rec.name);
+  const group = new THREE.Group(); group.add(inner);
+  fitDriver(group, rec.rot);
+  driver.group = group; driver.colorMats = colorMats; driver.rec = rec;
+  applyDriver();
+  drvEl.tools.hidden = false; drvEl.color.value = rec.color; drvEl.color.style.display = colorMats.length ? '' : 'none';
+  driverStatus(rec.name + '（' + (tris >= 10000 ? (tris / 10000).toFixed(1) + ' 萬' : tris) + ' 個三角形）' + (colorMats.length ? '，顏色用左邊的色票改' : ''));
+  if (persist) saveDriver(rec);
+}
+function clearDriver() {
+  driver.group = null; driver.colorMats = []; driver.rec = null;
+  applyDriver(); clearSavedDriver();
+  drvEl.tools.hidden = true; driverStatus('預設是松鼠。可以放自己做的 .obj／.stl／.glb');
+}
+drvEl.btn.addEventListener('click', () => drvEl.file.click());
+drvEl.file.addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  if (f.size > 25 * 1024 * 1024) { driverStatus('檔案超過 25 MB，請匯出小一點的'); return; }
+  driverStatus('讀取中…');
+  try { await useDriver({ name: f.name, buffer: await f.arrayBuffer(), color: drvEl.color.value, rot: null }, true); SFX.click(); }
+  catch (err) { console.warn(err); driverStatus('讀不進來：' + (err && err.message ? err.message : err)); }
+});
+drvEl.color.addEventListener('input', () => { for (const m of driver.colorMats) m.color.set(drvEl.color.value); });
+drvEl.color.addEventListener('change', () => { if (driver.rec) { driver.rec.color = drvEl.color.value; saveDriver(driver.rec); } });
+document.getElementById('btn-driver-flip').addEventListener('click', () => { if (!driver.rec) return; driver.rec.rot.x = (driver.rec.rot.x + 1) % 4; fitDriver(driver.group, driver.rec.rot); saveDriver(driver.rec); });
+document.getElementById('btn-driver-turn').addEventListener('click', () => { if (!driver.rec) return; driver.rec.rot.y = (driver.rec.rot.y + 1) % 4; fitDriver(driver.group, driver.rec.rot); saveDriver(driver.rec); });
+document.getElementById('btn-driver-clear').addEventListener('click', clearDriver);
+async function restoreDriver() {
+  const rec = await loadSavedDriver();
+  if (!rec || !rec.buffer) return;
+  try { await useDriver(rec, false); } catch (err) { console.warn('上次的角色讀不回來', err); clearSavedDriver(); }
 }
 
 // ---------- 畫質 ----------
@@ -892,6 +935,7 @@ async function bootStages() {
   });
   await stage(100, '好了', null);
   gameState = 'title';
+  restoreDriver();   // 上次上傳的角色（存在 IndexedDB），讀不到就維持松鼠
   loadEl.box.classList.add('hide');
   renderBoard(document.getElementById('board-title'));
   requestAnimationFrame(frame);
@@ -945,6 +989,6 @@ if (loadEl.tip) loadEl.tip.textContent = '小提示：' + TIPS[Math.floor(Math.r
 boot();
 
 // 除錯口（測試用）：window.__game
-window.__game = { audioState, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
+window.__game = { audioState, driver, useDriver, clearDriver, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
   // 量 draw call：renderer.info 每次 render 會歸零，後製最後一道只有 1 個 call，所以只量場景那一道
   measure() { const r = renderer; r.info.autoReset = false; r.info.reset(); r.setRenderTarget(fx.enabled ? fx.rt : null); r.render(scene, camera); const o = { calls: r.info.render.calls, triangles: r.info.render.triangles, pixelRatio: r.getPixelRatio() }; r.info.autoReset = true; r.setRenderTarget(null); return o; } };
