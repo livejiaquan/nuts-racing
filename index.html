@@ -57,33 +57,97 @@
   #load-bar { height:100%; width:0; background:linear-gradient(90deg, #49A86B, var(--gold), var(--orange)); transition:width .25s; }
   #load-pct { opacity:.9; } #load-tip { font-size:14px; opacity:.7; margin-top:6px; }
 
-  /* ---------- 標題畫面 ---------- */
+  /* ---------- 首頁 ---------- */
   #title { position:fixed; inset:0; z-index:10; display:flex; align-items:center; padding:0 6vw;
-    background:linear-gradient(90deg, rgba(14,42,23,.92) 0%, rgba(14,42,23,.72) 38%, rgba(14,42,23,.15) 62%, rgba(14,42,23,0) 80%); }
-  .title-col { width:min(560px, 90vw); display:flex; flex-direction:column; gap:16px; }
-  .pill { display:inline-flex; align-items:center; gap:8px; background:rgba(253,246,227,.12); border:1.5px solid rgba(253,246,227,.45); border-radius:999px; padding:6px 14px; font-size:13px; letter-spacing:1px; width:max-content; }
-  .pill i { width:8px; height:8px; border-radius:50%; background:var(--gold); display:inline-block; }
-  #title h1 { margin:0; font-size:clamp(64px, 8.5vw, 112px); line-height:1; letter-spacing:8px; color:var(--cream); font-weight:900;
+    background:linear-gradient(90deg, rgba(14,42,23,.9) 0%, rgba(14,42,23,.7) 34%, rgba(14,42,23,.12) 58%, rgba(14,42,23,0) 78%); }
+  .title-col { width:min(480px, 88vw); display:flex; flex-direction:column; gap:22px; }
+  #title h1 { margin:0; font-size:clamp(60px, 7vw, 96px); line-height:1; letter-spacing:8px; color:var(--cream); font-weight:900; white-space:nowrap;
     text-shadow:0 8px 0 var(--forest-deep), 0 0 50px rgba(232,116,59,.45); }
   #title h1 span { color:var(--orange); }
-  .title-en { font-family:var(--num-font); font-size:clamp(14px, 1.6vw, 20px); letter-spacing:10px; color:var(--gold); margin-top:-4px; }
-  .title-tag { font-size:15px; opacity:.9; line-height:1.6; }
-  .start-card { display:flex; flex-direction:column; gap:14px; }
-  .field { display:flex; align-items:center; gap:12px; }
-  .field .label { min-width:70px; }
-  #player-name { flex:1; font-size:16px; padding:9px 14px; border-radius:12px; border:2px solid rgba(253,246,227,.45); background:rgba(253,246,227,.1); color:var(--cream); outline:none; }
-  #player-name:focus { border-color:var(--gold); background:rgba(253,246,227,.16); }
-  #player-name::placeholder { color:rgba(253,246,227,.5); }
-  #swatches { display:flex; gap:9px; }
-  .swatch { width:36px; height:36px; border-radius:50%; border:3px solid rgba(253,246,227,.35); cursor:pointer; padding:0; transition:transform .1s; box-shadow:0 3px 0 rgba(0,0,0,.3); }
-  .swatch:hover { transform:scale(1.1); }
-  .swatch.on { border-color:var(--cream); transform:scale(1.18); box-shadow:0 0 0 3px var(--forest-deep), 0 0 16px rgba(253,246,227,.5); }
-  #color-name { font-size:14px; opacity:.9; min-width:64px; }
-  #driver-row { flex-wrap:wrap; }
-  #driver-row .btn.ghost { font-size:13px; padding:6px 12px; }
-  #driver-color { width:34px; height:30px; border:2px solid rgba(253,246,227,.45); border-radius:8px; background:none; padding:2px; cursor:pointer; }
-  #driver-name { flex-basis:100%; }
-  /* 車庫：鏡頭拉到自己的車旁邊，標題卡片淡出，左下角一小列工具 */
+  .title-en { font-family:var(--num-font); font-size:clamp(13px, 1.4vw, 17px); letter-spacing:5px; color:var(--gold); margin-top:-2px; white-space:nowrap; }
+  .menu { display:flex; flex-direction:column; gap:12px; width:min(320px, 80vw); }
+  .menu .btn { justify-content:center; font-size:26px; padding:14px 20px; letter-spacing:6px; border-radius:16px; }
+  .menu .btn svg { width:26px; height:26px; flex:none; }
+  .btn.green { background:linear-gradient(180deg, #2E7A45, var(--forest)); box-shadow:0 5px 0 var(--forest-deep), 0 8px 18px rgba(0,0,0,.25); }
+  .btn.green:active { box-shadow:0 1px 0 var(--forest-deep), 0 3px 8px rgba(0,0,0,.25); }
+  .link { color:var(--gold); font-weight:700; text-decoration:none; border-bottom:1.5px dashed rgba(242,183,5,.6); font-size:15px; cursor:pointer; width:max-content; }
+  .link:hover { border-bottom-style:solid; }
+  #title .title-col > * { animation:fadeUp .6s cubic-bezier(.2,1,.3,1) both; }
+  #title .title-col > *:nth-child(2) { animation-delay:.08s; } #title .title-col > *:nth-child(3) { animation-delay:.16s; }
+  @keyframes fadeUp { from { transform:translateY(26px); opacity:0; } to { transform:none; opacity:1; } }
+  @media (max-height: 640px) { #title h1 { font-size:60px; } .title-col { gap:14px; } .menu { gap:9px; } .menu .btn { font-size:22px; padding:11px 18px; } }
+  #brand { position:fixed; left:6vw; bottom:18px; font-size:12px; letter-spacing:3px; opacity:.55; z-index:11; font-family:var(--num-font); }
+
+  /* 右上角：只有一顆齒輪 */
+  #tools { position:fixed; right:18px; top:18px; z-index:12; display:flex; gap:8px; }
+  .btn.icon { width:46px; height:46px; padding:0; justify-content:center; border-radius:50%; }
+  .btn.icon svg { width:24px; height:24px; }
+
+  /* ---------- 開始比賽小視窗 ---------- */
+  .modal { position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center; background:rgba(14,42,23,.6); backdrop-filter:blur(3px); }
+  .dlg { background:var(--cream); color:var(--ink); border-radius:22px; padding:26px 30px; width:min(440px, 92vw); display:flex; flex-direction:column; gap:14px;
+    box-shadow:0 20px 60px rgba(0,0,0,.4); animation:fadeUp .3s cubic-bezier(.2,1,.3,1) both; }
+  .dlg h2 { margin:0; font-size:26px; color:var(--forest); font-weight:900; letter-spacing:1px; }
+  .dlg h2 span { color:var(--orange); }
+  .dlg .label { color:var(--forest); opacity:.8; }
+  #player-name { font-size:20px; padding:10px 14px; border-radius:12px; border:2px solid rgba(30,86,49,.3); background:#fff; color:var(--ink); outline:none; width:100%; }
+  #player-name:focus { border-color:var(--orange); }
+  #player-name::placeholder { color:rgba(35,48,31,.4); }
+  .seg { display:flex; gap:8px; }
+  .seg button { flex:1; cursor:pointer; border:2px solid rgba(30,86,49,.25); background:#fff; color:var(--forest); border-radius:12px; padding:9px 0; font:inherit; font-weight:700; font-size:16px; transition:transform .08s; }
+  .seg button:hover { transform:translateY(-1px); }
+  .seg button.on { background:var(--forest); color:#fff; border-color:var(--forest); }
+  .dlg .row { justify-content:center; margin-top:4px; }
+  .dlg .btn.ghost { color:var(--forest); box-shadow:inset 0 0 0 2px rgba(30,86,49,.5); }
+  .dlg .tiny { text-align:center; color:#4a5a44; }
+
+  /* ---------- 整頁（設定、車庫） ---------- */
+  .page { position:fixed; inset:0; z-index:15; background:linear-gradient(180deg, rgba(14,42,23,.95), rgba(14,42,23,.88)); display:flex; flex-direction:column; overflow:auto; }
+  .page-head { display:flex; align-items:center; gap:16px; padding:16px 24px 10px; }
+  .page-head h2 { margin:0; font-size:30px; letter-spacing:6px; font-weight:900; flex:1; }
+  .page-body { padding:0 24px 24px; width:min(720px, 100%); margin:0 auto; display:flex; flex-direction:column; gap:10px; }
+  .srow { display:flex; align-items:center; gap:16px; background:rgba(253,246,227,.07); border:1.5px solid rgba(253,246,227,.18); border-radius:14px; padding:11px 18px; }
+  .srow .sname { min-width:96px; font-size:18px; font-weight:700; }
+  .srow .sdesc { font-size:13px; opacity:.7; flex:1; line-height:1.4; }
+  .srow .seg { width:240px; flex:none; }
+  .page .seg button { background:rgba(253,246,227,.08); color:var(--cream); border-color:rgba(253,246,227,.35); }
+  .page .seg button.on { background:var(--orange); border-color:var(--orange); color:#fff; }
+  .srow .btn.ghost { flex:none; }
+  @media (max-width: 860px) { .srow .seg { width:200px; } }
+
+  /* 設定裡的 micro:bit 區塊：預設收合 */
+  #mb-sec { background:rgba(253,246,227,.07); border:1.5px solid rgba(253,246,227,.18); border-radius:14px; }
+  #mb-sec-head { display:flex; align-items:center; gap:14px; padding:11px 18px; cursor:pointer; }
+  #mb-sec-head .sname { min-width:96px; font-size:18px; font-weight:700; }
+  #mb-sec-head .sdesc { flex:1; font-size:13px; opacity:.7; }
+  #mb-sec-head .chev { width:22px; height:22px; transition:transform .2s; opacity:.8; flex:none; }
+  #mb-sec.open #mb-sec-head .chev { transform:rotate(90deg); }
+  #mb-body { display:none; padding:4px 18px 16px; font-size:14px; line-height:1.6; border-top:1px solid rgba(253,246,227,.14); }
+  #mb-sec.open #mb-body { display:block; }
+  #mb-body .row { margin-top:10px; }
+  #mb-body .btn { font-size:14px; padding:8px 14px; }
+  #mb-state { margin-top:8px; font-weight:700; color:var(--gold); }
+  #tiltbar { position:relative; height:10px; margin-top:12px; background:rgba(253,246,227,.18); border-radius:5px; max-width:360px; }
+  #tiltbar i { position:absolute; top:-3px; width:4px; height:16px; background:var(--orange); border-radius:2px; left:50%; transform:translateX(-50%); }
+  #tiltbar::after { content:''; position:absolute; left:50%; top:-2px; width:1px; height:14px; background:rgba(253,246,227,.5); }
+  #mb-hint { font-size:13px; opacity:.8; margin-top:10px; }
+  #mb-body details { margin-top:10px; font-size:13px; opacity:.85; }
+  #mb-body summary { cursor:pointer; color:var(--gold); }
+  #mb-body details li { margin:4px 0; }
+
+  /* ---------- 排行榜：右側滑出 ---------- */
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(380px, 92vw); z-index:18; background:rgba(14,42,23,.96); border-left:3px solid var(--card-border);
+    transform:translateX(105%); transition:transform .3s cubic-bezier(.2,1,.3,1); padding:20px 22px; display:flex; flex-direction:column; gap:12px; box-shadow:-10px 0 40px rgba(0,0,0,.4); overflow:auto; }
+  .drawer.open { transform:none; }
+  .board-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .board-head h2 { margin:0; font-size:22px; letter-spacing:3px; flex:1; }
+  .board-head .label { color:var(--cream); opacity:.8; }
+  #board-title table, #board-result table { border-collapse:collapse; font-size:15px; width:100%; }
+  #board-title td, #board-result td { padding:5px 8px 5px 0; }
+  #board-title td:first-child, #board-result td:first-child { width:30px; font-family:var(--num-font); color:var(--gold); }
+  #board-title tr.me td, #board-result tr.me td { color:var(--orange); font-weight:700; }
+
+  /* ---------- 車庫（浮動卡，下一批改整頁） ---------- */
   #title.garage { background:none; pointer-events:none; }   /* 讓滑鼠拖得到底下的畫布 */
   #title.garage .title-col { opacity:0; pointer-events:none; transition:opacity .3s; }
   #garage { position:fixed; left:6vw; bottom:56px; z-index:12; display:flex; flex-direction:column; gap:10px; padding:14px 18px; animation:fadeUp .4s cubic-bezier(.2,1,.3,1) both; }
@@ -96,40 +160,13 @@
   .garage-size input { width:110px; accent-color:var(--orange); }
   .garage-size span { font-family:var(--num-font); min-width:42px; }
   #garage-tools[hidden] { display:none; }
-  .start-row { display:flex; align-items:center; gap:16px; margin-top:4px; }
-  .link { color:var(--gold); font-weight:700; text-decoration:none; border-bottom:1.5px dashed rgba(242,183,5,.6); font-size:14px; }
-  .link:hover { border-bottom-style:solid; }
-  #board-wrap { padding:12px 16px; }
-  .board-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-  .board-head .label { color:var(--cream); opacity:.8; }
-  #board-title table, #board-result table { border-collapse:collapse; font-size:14px; width:100%; }
-  #board-title td, #board-result td { padding:4px 8px 4px 0; }
-  #board-title td:first-child, #board-result td:first-child { width:30px; font-family:var(--num-font); color:var(--gold); }
-  #board-title tr.me td, #board-result tr.me td { color:var(--orange); font-weight:700; }
-  .keys { font-size:13px; opacity:.85; line-height:2.1; }
-  .keys b { color:var(--orange); }
-  #brand { position:fixed; left:6vw; bottom:18px; font-size:12px; letter-spacing:3px; opacity:.55; z-index:11; font-family:var(--num-font); }
-  #title .title-col > * { animation:fadeUp .6s cubic-bezier(.2,1,.3,1) both; }
-  #title .title-col > *:nth-child(2) { animation-delay:.06s; } #title .title-col > *:nth-child(3) { animation-delay:.12s; }
-  #title .title-col > *:nth-child(4) { animation-delay:.18s; } #title .title-col > *:nth-child(5) { animation-delay:.24s; } #title .title-col > *:nth-child(6) { animation-delay:.3s; }
-  @keyframes fadeUp { from { transform:translateY(26px); opacity:0; } to { transform:none; opacity:1; } }
-
-  /* 右上角小工具列 */
-  #tools { position:fixed; right:18px; top:18px; z-index:12; display:flex; gap:8px; }
-  #title.hide ~ #tools { top:auto; bottom:232px; }
-  #mb-panel { position:fixed; right:18px; top:70px; width:250px; z-index:12; font-size:13px; line-height:1.5; transition:opacity .3s; padding:10px 14px; }
-  #mb-panel.dim { opacity:.18; } #mb-panel.dim:hover { opacity:1; }
-  #mb-panel h3 { margin:0 0 4px; font-size:14px; color:var(--orange); cursor:pointer; display:flex; justify-content:space-between; align-items:center; letter-spacing:1px; }
-  #mb-toggle { font-size:12px; color:var(--cream); opacity:.7; font-weight:400; }
-  #mb-panel.collapsed { width:auto; padding:7px 12px; }
-  #mb-panel.collapsed #mb-body { display:none; }
-  #mb-panel.collapsed h3 { margin:0; gap:10px; }
-  #mb-panel .btn { font-size:13px; padding:7px 12px; box-shadow:0 3px 0 var(--orange-dark); border-radius:10px; }
-  #tiltbar { position:relative; height:10px; margin-top:10px; background:rgba(253,246,227,.18); border-radius:5px; }
-  #tiltbar i { position:absolute; top:-3px; width:4px; height:16px; background:var(--orange); border-radius:2px; left:50%; transform:translateX(-50%); }
-  #tiltbar::after { content:''; position:absolute; left:50%; top:-2px; width:1px; height:14px; background:rgba(253,246,227,.5); }
-  #mb-hint { font-size:12px; opacity:.8; margin-top:8px; }
-  @media (max-width: 980px) { #mb-panel { width:210px; font-size:12px; } }
+  #swatches { display:flex; gap:9px; }
+  .swatch { width:34px; height:34px; border-radius:50%; border:3px solid rgba(253,246,227,.35); cursor:pointer; padding:0; transition:transform .1s; box-shadow:0 3px 0 rgba(0,0,0,.3); }
+  .swatch:hover { transform:scale(1.1); }
+  .swatch.on { border-color:var(--cream); transform:scale(1.18); box-shadow:0 0 0 3px var(--forest-deep), 0 0 16px rgba(253,246,227,.5); }
+  #color-name { font-size:14px; opacity:.9; min-width:64px; }
+  #driver-color { width:34px; height:30px; border:2px solid rgba(253,246,227,.45); border-radius:8px; background:none; padding:2px; cursor:pointer; }
+  #driver-name { flex-basis:100%; }
 
   /* ---------- HUD ---------- */
   #vignette { position:fixed; inset:0; pointer-events:none; z-index:4; opacity:0; transition:opacity .2s;
@@ -152,6 +189,9 @@
   #hud-nutcard { right:18px; top:18px; font-family:var(--num-font); font-size:26px; display:flex; align-items:center; gap:10px; padding:8px 18px; }
   #hud-nutcard i { width:24px; height:28px; background:linear-gradient(90deg, #E8923A 45%, #F8CC8E 55%); border-radius:50% 50% 50% 50% / 42% 42% 58% 58%; display:inline-block; position:relative; box-shadow:0 0 0 2px #fff; }
   #hud-nutcard i::before { content:''; position:absolute; left:-2px; right:-2px; top:-1px; height:12px; background:#5A3A1E; border-radius:50% 50% 30% 30% / 70% 70% 30% 30%; }
+  #mb-chip { right:18px; top:74px; font-size:13px; padding:6px 12px; display:flex; align-items:center; gap:8px; border-width:2px; }
+  #mb-chip i { width:8px; height:8px; border-radius:50%; background:#3BFF7A; box-shadow:0 0 8px #3BFF7A; }
+  #mb-chip b { font-family:var(--num-font); color:var(--gold); font-weight:400; }
   #hud-map { left:18px; bottom:18px; padding:8px; }
   #minimap { width:220px; height:200px; display:block; border-radius:10px; }
   #hud-speed { right:18px; bottom:18px; width:216px; height:200px; padding:8px; text-align:center; }
@@ -235,38 +275,79 @@
 
 <div id="title">
   <div class="title-col">
-    <div class="pill"><i></i>核果資訊學苑高雄校 ・ micro:bit 自走車班</div>
     <div>
       <h1>核果<span>賽車</span></h1>
       <div class="title-en">NUTS RACING ・ KAOHSIUNG</div>
     </div>
-    <div class="title-tag">高雄濃縮賽道：85 大樓、愛河大橋、高雄港、駁二、巨蛋、美麗島。吃核果加速、按住煞車漂移，跑完 2 圈比誰最快。</div>
-    <div class="card start-card">
-      <div class="field"><span class="label">名字</span><input id="player-name" maxlength="12" placeholder="輸入名字，時間會記在排行榜"></div>
-      <div class="field"><span class="label">車色</span><div id="swatches"></div><span id="color-name"></span></div>
-      <div class="field" id="driver-row"><span class="label">駕駛</span>
-        <button class="btn ghost" id="btn-driver">上傳我的角色</button>
-        <input type="file" id="driver-file" accept=".obj,.stl,.glb,.gltf" hidden>
-        <button class="btn ghost" id="btn-garage">看車子</button>
-        <span id="driver-name" class="tiny">預設是松鼠。可以放自己做的 .obj／.stl／.glb</span>
-      </div>
-      <div class="start-row">
-        <button class="btn big" id="btn-start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>開始比賽</button>
-        <a id="hex-link" class="link" href="microbit程式/方向盤.hex" download="核果賽車_方向盤.hex">下載 micro:bit 程式 (.hex)</a>
-      </div>
+    <div class="menu">
+      <button class="btn" id="btn-start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>開始比賽</button>
+      <button class="btn green" id="btn-garage"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11h1a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-1v1.5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V19H8v1.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V18H4a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1h1zm2.1 0h9.8l-1-3H8.1l-1 3zM7 16a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm10 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>車庫</button>
+      <button class="btn green" id="btn-settings"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3 1a7.7 7.7 0 0 0-1.8-1L15 3.5H9l-.3 2.6a7.7 7.7 0 0 0-1.8 1l-2.3-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-1c.6.4 1.2.8 1.8 1l.3 2.6h6l.3-2.6c.6-.2 1.2-.6 1.8-1l2.3 1 2-3.4-2-1.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>設定</button>
     </div>
-    <div class="card" id="board-wrap">
-      <div class="board-head"><span class="label">這台電腦的最佳時間</span><button class="btn ghost" id="btn-clear-board" style="font-size:12px;padding:3px 10px">清空</button></div>
-      <div id="board-title"></div>
+    <a class="link" id="btn-board">排行榜</a>
+  </div>
+</div>
+<div id="brand">NUTS INSTITUTE</div>
+
+<div id="tools">
+  <button class="btn ghost icon" id="btn-gear" title="設定"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3 1a7.7 7.7 0 0 0-1.8-1L15 3.5H9l-.3 2.6a7.7 7.7 0 0 0-1.8 1l-2.3-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-1c.6.4 1.2.8 1.8 1l.3 2.6h6l.3-2.6c.6-.2 1.2-.6 1.8-1l2.3 1 2-3.4-2-1.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
+</div>
+
+<!-- 開始比賽：名字與難度 -->
+<div id="start-dlg" class="modal hide">
+  <div class="dlg">
+    <h2 id="start-title">你叫什麼名字？</h2>
+    <input id="player-name" maxlength="12" placeholder="輸入名字，時間會記在排行榜" autocomplete="off">
+    <div class="label">難度</div>
+    <div class="seg" id="difficulty">
+      <button data-v="easy">輕鬆</button><button data-v="normal">普通</button><button data-v="hard">困難</button>
     </div>
-    <div class="keys">
-      <b>鍵盤</b>　<kbd>↑</kbd> 油門　<kbd>↓</kbd> 煞車　<kbd>←</kbd><kbd>→</kbd> 轉彎　<kbd>Enter</kbd> 開始<br>
-      <b>micro:bit</b>　左右傾斜轉彎　<kbd>B</kbd> 油門（右手）　<kbd>A</kbd> 煞車（左手）　按住煞車進彎＝漂移
+    <div class="row"><button class="btn big" id="btn-go"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>出發</button><button class="btn ghost" id="btn-start-cancel">返回</button></div>
+    <div class="tiny">按 Enter 也可以出發</div>
+  </div>
+</div>
+
+<!-- 排行榜：右側滑出 -->
+<div id="board-drawer" class="drawer">
+  <div class="board-head"><h2>排行榜</h2><button class="btn ghost" id="btn-board-close">關閉</button></div>
+  <div class="label">這台電腦的最佳時間</div>
+  <div id="board-title"></div>
+  <div class="row" style="margin-top:auto;justify-content:flex-end"><button class="btn ghost" id="btn-clear-board">清空排行榜</button></div>
+</div>
+
+<!-- 設定：整頁 -->
+<div id="settings" class="page hide">
+  <div class="page-head"><h2>設定</h2><button class="btn" id="btn-settings-close">回首頁</button></div>
+  <div class="page-body">
+    <div class="srow"><span class="sname">音效</span><span class="sdesc">引擎聲、音樂和提示音</span><div class="seg" id="seg-sound"><button data-v="on">開</button><button data-v="off">關</button></div></div>
+    <div class="srow"><span class="sname">畫質</span><span class="sdesc">跑不順就選低：關掉陰影和特效</span><div class="seg" id="seg-quality"><button data-v="high">高</button><button data-v="low">低</button></div></div>
+    <div class="srow"><span class="sname">時段</span><span class="sdesc">黃昏是橘色的斜陽和長影子</span><div class="seg" id="seg-time"><button data-v="day">白天</button><button data-v="dusk">黃昏</button></div></div>
+    <div class="srow"><span class="sname">怎麼玩</span><span class="sdesc">轉彎、油門煞車、漂移，30 秒看完</span><button class="btn ghost" id="btn-howto">重看教學</button></div>
+    <div id="mb-sec">
+      <div id="mb-sec-head"><svg class="chev" viewBox="0 0 24 24" fill="currentColor"><path d="M9 5l7 7-7 7z"/></svg><span class="sname">micro:bit 方向盤</span><span class="sdesc" id="mb-sec-desc">用鍵盤玩的話不用管這裡</span></div>
+      <div id="mb-body">
+        <div id="mb-state">未連線（用鍵盤開車）</div>
+        <div class="row"><button class="btn" id="mb-connect">連接 micro:bit</button><button class="btn ghost" id="mb-bridge" title="先執行 橋接程式.py">用橋接程式連</button><button class="btn ghost" id="mb-zero">校正置中</button><button class="btn ghost" id="mb-baud" title="序列速率">115200</button></div>
+        <div id="tiltbar"><i id="tilt-needle"></i></div>
+        <div id="mb-hint">傾斜轉彎，B 油門、A 煞車。「連接」要 Chrome／Edge；「橋接」先跑 橋接程式.py，任何瀏覽器都行。</div>
+        <div class="row"><a id="hex-link" class="link" href="microbit程式/方向盤.hex" download="核果賽車_方向盤.hex">下載 micro:bit 程式 (.hex)</a></div>
+        <details>
+          <summary>連不上怎麼辦</summary>
+          <ul>
+            <li>板子要先燒好程式：把上面的 .hex 拖進 MICROBIT 磁碟，等黃燈停止閃爍。</li>
+            <li>「連接」跳出來的視窗選 mbed Serial Port 或 BBC micro:bit CMSIS-DAP。沒看到就換一條 USB 線（有些線只能充電）。</li>
+            <li>連上卻收不到資料：按一下板子背面的 reset，或把序列速率切成 9600 再連一次。</li>
+            <li>方向歪了：把 micro:bit 擺平，按「校正置中」。</li>
+          </ul>
+        </details>
+      </div>
     </div>
   </div>
 </div>
+
 <div id="garage" class="card" hidden>
   <div class="garage-head">看車子　<span class="tiny">拖曳畫面可以轉</span></div>
+  <div class="garage-row"><span class="label">車色</span><div id="swatches"></div><span id="color-name"></span></div>
   <div class="garage-row" id="garage-tools">
     <input type="color" id="driver-color" value="#D98A41" title="模型沒有自帶顏色時用這個顏色">
     <button class="btn ghost" id="btn-driver-flip" title="模型躺著的話按這個">翻</button>
@@ -275,26 +356,12 @@
     <button class="btn ghost" id="btn-driver-clear">用回松鼠</button>
   </div>
   <div class="garage-row">
-    <button class="btn ghost" id="btn-driver-2">換一個檔</button>
-    <button class="btn" id="btn-garage-done">好了</button>
+    <button class="btn ghost" id="btn-driver">上傳我的角色</button>
+    <input type="file" id="driver-file" accept=".obj,.stl,.glb,.gltf" hidden>
+    <span id="driver-name" class="tiny">預設是松鼠。可以放自己做的 .obj／.stl／.glb</span>
   </div>
-</div>
-<div id="brand">NUTS INSTITUTE</div>
-
-<div id="tools">
-  <button class="btn ghost" id="btn-mute">音效：開</button>
-  <button class="btn ghost" id="btn-quality">畫質：高</button>
-  <button class="btn ghost" id="btn-time">時段：白天</button>
-</div>
-
-<div id="mb-panel" class="card">
-  <h3 id="mb-head">micro:bit 方向盤 <span id="mb-toggle">收起</span></h3>
-  <div id="mb-body">
-  <div id="mb-state">未連線（用鍵盤開車）</div>
-  <div class="row" style="margin-top:8px"><button class="btn" id="mb-connect">連接 micro:bit</button><button class="btn ghost" id="mb-bridge" title="先執行 橋接程式.py">用橋接程式連</button></div>
-  <div class="row" style="margin-top:8px"><button class="btn ghost" id="mb-zero">校正置中</button><button class="btn ghost" id="mb-baud">115200</button></div>
-  <div id="tiltbar"><i id="tilt-needle"></i></div>
-  <div id="mb-hint">傾斜轉彎，B 油門、A 煞車。「連接」要 Chrome／Edge；「橋接」先跑 橋接程式.py，任何瀏覽器都行。</div>
+  <div class="garage-row">
+    <button class="btn" id="btn-garage-done">好了</button>
   </div>
 </div>
 
@@ -309,6 +376,7 @@
     </div>
   </div>
   <div class="card" id="hud-nutcard"><i></i><span id="hud-nuts">0</span></div>
+  <div class="card hide" id="mb-chip"><i></i>micro:bit 已連線　傾斜 <b id="mb-chip-tilt">0</b>°</div>
   <div class="card" id="hud-map"><canvas id="minimap" width="220" height="200"></canvas></div>
   <div class="card" id="hud-speed"><canvas id="gauge" width="200" height="180"></canvas></div>
   <div id="lights"><i></i><i></i><i></i><i></i><i></i></div>

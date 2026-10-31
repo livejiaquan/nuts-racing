@@ -113,7 +113,12 @@ const keys = { left: false, right: false, up: false, down: false };
 const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'up', w: 'up', W: 'up', ArrowDown: 'down', s: 'down', S: 'down' };
 function typing(e) { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'); }   // 在名字欄打字時不要搶走 a/d/w/s
 window.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (gameState === 'title' || gameState === 'done') && !tutorialOpen()) { requestStart(); return; }
+  if (e.key === 'Enter' && !tutorialOpen()) {
+    if (startDlgOpen()) { e.preventDefault(); confirmStart(); return; }
+    if (gameState === 'title' && !overlayOpen() && !garage.on) { openStartDialog(); return; }
+    if (gameState === 'done' && !overlayOpen()) { startRace(); return; }
+  }
+  if (e.key === 'Escape' && closeOverlays()) return;
   if (typing(e)) return;
   const k = KEYMAP[e.key]; if (k) { keys[k] = true; e.preventDefault(); }
 });
@@ -491,12 +496,19 @@ function updateCamera(dt) {
     return;
   }
   if (gameState === 'title' || gameState === 'loading') {
-    titleAngle += dt * 0.12;
-    const c = S.p[Math.floor((titleAngle * 0.06 % 1 + 1) % 1 * SAMPLES)];
-    camPos.set(c.x + Math.cos(titleAngle) * 60, 30, c.z + Math.sin(titleAngle) * 60);
-    camera.position.lerp(camPos, 1 - Math.exp(-dt * 2));
-    camera.lookAt(c.x, 2, c.z);
-    camera.fov += (60 - camera.fov) * 0.05;
+    // 首頁：鏡頭繞著玩家自己的車慢慢轉，車是主角（約 8 公尺遠、3 公尺高）
+    // 看的點往鏡頭的左邊偏一點，車就落在畫面右半邊，左邊留給標題和按鈕
+    if (!player) return;
+    titleAngle += dt * 0.22;
+    const kp = player.kart.group.position;
+    const R = 8.0, H = 3.0;
+    camPos.set(kp.x + Math.sin(titleAngle) * R, kp.y + H, kp.z + Math.cos(titleAngle) * R);
+    camera.position.lerp(camPos, 1 - Math.exp(-dt * 2.5));
+    tmpF.subVectors(kp, camera.position); tmpF.y = 0; tmpF.normalize();
+    tmpR.set(-tmpF.z, 0, tmpF.x);
+    camLook.set(kp.x, kp.y + 1.1, kp.z).addScaledVector(tmpR, -1.6);
+    camera.lookAt(camLook);
+    camera.fov += (50 - camera.fov) * Math.min(1, dt * 3);
     camera.updateProjectionMatrix();
     return;
   }
@@ -532,7 +544,9 @@ const el = {
   title: document.getElementById('title'), result: document.getElementById('result'), resultBody: document.getElementById('result-body'),
   mbState: document.getElementById('mb-state'), mbBtn: document.getElementById('mb-connect'), mbBaud: document.getElementById('mb-baud'),
   tilt: document.getElementById('tilt-needle'), street: document.getElementById('hud-street'), colorName: document.getElementById('color-name'), swatches: document.getElementById('swatches'),
-  tutorial: document.getElementById('tutorial')
+  tutorial: document.getElementById('tutorial'), startDlg: document.getElementById('start-dlg'), startTitle: document.getElementById('start-title'), nameInput: document.getElementById('player-name'),
+  settings: document.getElementById('settings'), board: document.getElementById('board-drawer'), mbChip: document.getElementById('mb-chip'), mbChipTilt: document.getElementById('mb-chip-tilt'),
+  mbSec: document.getElementById('mb-sec'), mbSecDesc: document.getElementById('mb-sec-desc'), gear: document.getElementById('btn-gear')
 };
 const gctx = el.gauge.getContext('2d');
 const mctx = el.minimap.getContext('2d');
@@ -656,34 +670,89 @@ function updateHUD() {
     el.driftFill.className = c >= DRIFT_T2 ? 'orange' : (c >= DRIFT_T1 ? 'blue' : '');
   }
   drawGauge(); drawMinimap();
+  updateMbUI();
+  const live = MBit.MB.connected && performance.now() - MBit.MB.lastData < 700;
+  el.mbChip.classList.toggle('hide', !live);
+  if (live) el.mbChipTilt.textContent = String(Math.round(MBit.MB.rawRoll - MBit.MB.zero));
+}
+// 設定頁 micro:bit 區塊的狀態文字、按鈕字樣、傾斜指針
+function updateMbUI() {
   el.mbState.textContent = MBit.MB.status;
   el.mbBtn.textContent = MBit.MB.connected ? '中斷連線' : '連接 micro:bit';
   el.tilt.style.left = (50 + MBit.MB.steer * 46) + '%';
+  el.mbSecDesc.textContent = MBit.MB.connected ? MBit.MB.status : '用鍵盤玩的話不用管這裡';
 }
 
 // ---------- 流程 ----------
+// 浮層：開始小視窗、設定頁、排行榜。開著的時候 Enter 不會直接開賽
+function startDlgOpen() { return !el.startDlg.classList.contains('hide'); }
+function overlayOpen() { return startDlgOpen() || !el.settings.classList.contains('hide') || el.board.classList.contains('open'); }
+function closeOverlays() {
+  let closed = false;
+  if (startDlgOpen()) { el.startDlg.classList.add('hide'); closed = true; }
+  if (!el.settings.classList.contains('hide')) { el.settings.classList.add('hide'); closed = true; }
+  if (el.board.classList.contains('open')) { el.board.classList.remove('open'); closed = true; }
+  return closed;
+}
+function showGear(on) { el.gear.classList.toggle('hide', !on); }
+
+// 難度：這批只記住與顯示，數值下一批接
+const DIFF_KEY = 'nuts-racing-difficulty';
+const DIFFICULTIES = { easy: '輕鬆', normal: '普通', hard: '困難' };
+let difficulty = 'normal';
+try { difficulty = DIFFICULTIES[localStorage.getItem(DIFF_KEY)] ? localStorage.getItem(DIFF_KEY) : 'normal'; } catch (e) {}
+function setDifficulty(d) {
+  if (!DIFFICULTIES[d]) return;
+  difficulty = d;
+  try { localStorage.setItem(DIFF_KEY, d); } catch (e) {}
+  setSeg('difficulty', d);
+}
+// 分段按鈕（輕鬆／普通／困難、開／關、高／低…）：亮起選到的那顆
+function setSeg(id, v) { document.querySelectorAll('#' + id + ' button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
+function onSeg(id, fn) { document.querySelectorAll('#' + id + ' button').forEach(b => b.addEventListener('click', () => { fn(b.dataset.v); SFX.click(); })); }
+
+// 開始比賽的小視窗：名字（記得上次的）、難度、出發
+function openStartDialog() {
+  if (gameState !== 'title' || overlayOpen()) return;
+  el.startDlg.classList.remove('hide');
+  updateStartTitle();
+  el.nameInput.focus(); el.nameInput.select();
+  SFX.click();
+}
+function updateStartTitle() {
+  const n = el.nameInput.value.trim();
+  el.startTitle.innerHTML = n ? '以 <span>' + n.replace(/</g, '&lt;') + '</span> 出賽' : '你叫什麼名字？';
+}
+function confirmStart() {
+  try { localStorage.setItem('nuts-racing-name', el.nameInput.value); } catch (e) {}
+  el.startDlg.classList.add('hide');
+  requestStart();
+}
+
 const TUT_KEY = 'nuts-racing-tutorial-v1';
+let tutorialMode = 'start';   // start：看完就開賽；review：從設定重看，看完回到原來的畫面
 function tutorialOpen() { return !el.tutorial.classList.contains('hide'); }
+function openTutorial(mode) { tutorialMode = mode; el.tutorial.classList.remove('hide'); SFX.click(); }
 function requestStart() {
   let seen = false;
   try { seen = !!localStorage.getItem(TUT_KEY); } catch (e) {}
-  if (!seen) { el.tutorial.classList.remove('hide'); SFX.click(); return; }
+  if (!seen) { openTutorial('start'); return; }
   startRace();
 }
 function closeTutorial() {
   try { localStorage.setItem(TUT_KEY, '1'); } catch (e) {}
   el.tutorial.classList.add('hide');
-  startRace();
+  if (tutorialMode === 'start') startRace();
 }
 
 function startRace() {
-  exitGarage();
+  exitGarage(); closeOverlays();
   resetRace();
   gameState = 'countdown'; lastCount = 4;
   el.title.classList.add('hide'); el.result.classList.add('hide');
   el.hud.classList.remove('hide');
   setLights(0, false);
-  document.getElementById('mb-panel').classList.add('dim');
+  showGear(false);
   engineStart(); bgmStart(); bgmSet('race');
   SFX.click();
   dyn.t = 0; dyn.frames = 0; dyn.slow = 0;
@@ -723,14 +792,14 @@ function finishRace() {
   if (myRank === 1) SFX.cheer();
   el.result.classList.remove('hide');
   el.hud.classList.add('hide');
-  document.getElementById('mb-panel').classList.remove('dim');
+  showGear(true);
 }
 
 function backToTitle() {
   gameState = 'title';
-  renderBoard(document.getElementById('board-title'));
   el.result.classList.add('hide'); el.hud.classList.add('hide');
   el.title.classList.remove('hide');
+  showGear(true);
   resetRace();
 }
 
@@ -767,7 +836,7 @@ function enterGarage() {
   if (gameState !== 'title' || garage.on) return;
   garage.on = true; garage.idle = 9;
   el.title.classList.add('garage'); garageEl.hidden = false;
-  document.getElementById('mb-panel').classList.add('dim');
+  closeOverlays(); showGear(false);
   drvEl.tools.hidden = !driver.rec;
   SFX.click();
 }
@@ -775,7 +844,7 @@ function exitGarage() {
   if (!garage.on) return;
   garage.on = false; garage.drag = null;
   el.title.classList.remove('garage'); garageEl.hidden = true;
-  if (gameState === 'title') document.getElementById('mb-panel').classList.remove('dim');
+  if (gameState === 'title') showGear(true);
 }
 canvas.addEventListener('pointerdown', e => { if (garage.on) { garage.drag = { x: e.clientX, a: garage.angle }; canvas.setPointerCapture(e.pointerId); } });
 canvas.addEventListener('pointermove', e => { if (garage.drag) garage.angle = garage.drag.a - (e.clientX - garage.drag.x) * 0.012; });
@@ -797,7 +866,7 @@ async function useDriver(rec, persist) {
   applyDriverSize();
   applyDriver();
   drvEl.tools.hidden = false; drvEl.color.value = rec.color; drvEl.color.style.display = colorMats.length ? '' : 'none';
-  driverStatus(rec.name + '（' + (tris >= 10000 ? (tris / 10000).toFixed(1) + ' 萬' : tris) + ' 個三角形）' + (colorMats.length ? '，顏色在「看車子」裡用色票改' : ''));
+  driverStatus(rec.name + '（' + (tris >= 10000 ? (tris / 10000).toFixed(1) + ' 萬' : tris) + ' 個三角形）' + (colorMats.length ? '，沒有自帶顏色，用左邊的色票改' : ''));
   if (persist) { saveDriver(rec); enterGarage(); }   // 上傳完直接看
 }
 function clearDriver() {
@@ -806,7 +875,6 @@ function clearDriver() {
   drvEl.tools.hidden = true; driverStatus('預設是松鼠。可以放自己做的 .obj／.stl／.glb');
 }
 drvEl.btn.addEventListener('click', () => drvEl.file.click());
-document.getElementById('btn-driver-2').addEventListener('click', () => drvEl.file.click());
 document.getElementById('btn-garage').addEventListener('click', enterGarage);
 document.getElementById('btn-garage-done').addEventListener('click', () => { exitGarage(); SFX.click(); });
 drvEl.size.addEventListener('input', () => { if (!driver.rec) return; driver.rec.scale = drvEl.size.value / 100; applyDriverSize(); });
@@ -863,7 +931,7 @@ function setQuality(q) {
   if (fx) fx.enabled = high;
   scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(m => m.needsUpdate = true); } });
   resize();
-  document.getElementById('btn-quality').textContent = high ? '畫質：高' : '畫質：低';
+  setSeg('seg-quality', q);
 }
 
 // ---------- 主迴圈：物理固定 60Hz，畫面跟著螢幕 ----------
@@ -916,7 +984,7 @@ function frame(now) {
   followShadow(lights.sun, shadowAt, ATMOS.sunDir);
   engineUpdate(Math.min(1, Math.abs(player.speed) / MAX_SPEED), gameState === 'race');
   skidUpdate(gameState === 'race' && (player.drift !== 0 || (Math.abs(player.steer) > 0.55 && player.speed > MAX_SPEED * 0.55) || (player.braking && player.speed > 20)) && !player.offroad);
-  if (gameState !== 'title') updateHUD(); else { el.mbState.textContent = MBit.MB.status; el.mbBtn.textContent = MBit.MB.connected ? '中斷連線' : '連接 micro:bit'; }
+  if (gameState !== 'title') updateHUD(); else updateMbUI();
 
   updateDynamicRes(rawDt);
 
@@ -986,44 +1054,61 @@ async function bootStages() {
   gameState = 'title';
   restoreDriver();   // 上次上傳的角色（存在 IndexedDB），讀不到就維持松鼠
   loadEl.box.classList.add('hide');
-  renderBoard(document.getElementById('board-title'));
   requestAnimationFrame(frame);
 }
 
 // ---------- 按鈕 ----------
-document.getElementById('btn-start').addEventListener('click', requestStart);
+// 首頁三顆
+document.getElementById('btn-start').addEventListener('click', openStartDialog);
+document.getElementById('btn-garage').addEventListener('click', enterGarage);
+document.getElementById('btn-settings').addEventListener('click', openSettings);
+document.getElementById('btn-board').addEventListener('click', openBoard);
+el.gear.addEventListener('click', openSettings);
+// 開始小視窗
+try { el.nameInput.value = localStorage.getItem('nuts-racing-name') || ''; } catch (e) {}
+el.nameInput.addEventListener('input', updateStartTitle);
+document.getElementById('btn-go').addEventListener('click', confirmStart);
+document.getElementById('btn-start-cancel').addEventListener('click', () => { el.startDlg.classList.add('hide'); SFX.click(); });
+el.startDlg.addEventListener('click', e => { if (e.target === el.startDlg) el.startDlg.classList.add('hide'); });   // 點旁邊關掉
+onSeg('difficulty', setDifficulty); setSeg('difficulty', difficulty);
+// 教學卡
 document.getElementById('tut-go').addEventListener('click', closeTutorial);
 document.getElementById('tut-skip').addEventListener('click', closeTutorial);
+// 排行榜抽屜
+function openBoard() { renderBoard(document.getElementById('board-title')); el.board.classList.add('open'); SFX.click(); }
+document.getElementById('btn-board-close').addEventListener('click', () => { el.board.classList.remove('open'); SFX.click(); });
 document.getElementById('btn-clear-board').addEventListener('click', () => { if (confirm('清掉這台電腦的排行榜？')) { saveBoard([]); renderBoard(document.getElementById('board-title')); } });
-try { document.getElementById('player-name').value = localStorage.getItem('nuts-racing-name') || ''; } catch (e) {}
-document.getElementById('player-name').addEventListener('change', e => { try { localStorage.setItem('nuts-racing-name', e.target.value); } catch (err) {} });
+// 結算
 document.getElementById('btn-again').addEventListener('click', startRace);
 document.getElementById('btn-title').addEventListener('click', backToTitle);
-document.getElementById('btn-quality').addEventListener('click', () => { setQuality(quality === 'high' ? 'low' : 'high'); dyn.slow = 0; });
+
+// ---------- 設定頁 ----------
+function openSettings() { if (gameState !== 'title' && gameState !== 'done') return; closeOverlays(); el.settings.classList.remove('hide'); SFX.click(); }
+document.getElementById('btn-settings-close').addEventListener('click', () => { el.settings.classList.add('hide'); SFX.click(); });
+onSeg('seg-sound', v => { setMuted(v === 'off'); setSeg('seg-sound', v); }); setSeg('seg-sound', isMuted() ? 'off' : 'on');
+onSeg('seg-quality', q => { setQuality(q); dyn.slow = 0; }); setSeg('seg-quality', quality);
+document.getElementById('btn-howto').addEventListener('click', () => openTutorial('review'));
+// micro:bit 區塊：預設收合，點標題展開
+function setMbOpen(open) { el.mbSec.classList.toggle('open', open); }
+document.getElementById('mb-sec-head').addEventListener('click', () => { setMbOpen(!el.mbSec.classList.contains('open')); SFX.click(); });
 
 // 時段：白天／黃昏（記在這台電腦）
 let timeOfDay = 'day';
 try { timeOfDay = PRESETS[localStorage.getItem('nuts-racing-time')] ? localStorage.getItem('nuts-racing-time') : 'day'; } catch (e) {}
 function applyTimeOfDay(name) {
   timeOfDay = name;
-  const P = setTimeOfDay(name, { scene, renderer, lights, clouds });
-  document.getElementById('btn-time').textContent = '時段：' + P.label;
+  setTimeOfDay(name, { scene, renderer, lights, clouds });
+  setSeg('seg-time', timeOfDay);
   try { localStorage.setItem('nuts-racing-time', name); } catch (e) {}
 }
-document.getElementById('btn-time').textContent = '時段：' + (PRESETS[timeOfDay] || PRESETS.day).label;
-document.getElementById('btn-time').addEventListener('click', () => { applyTimeOfDay(timeOfDay === 'day' ? 'dusk' : 'day'); SFX.click(); });
+setSeg('seg-time', timeOfDay);
+onSeg('seg-time', applyTimeOfDay);
 
 const ONLINE = location.protocol === 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 if (ONLINE) {
-  document.getElementById('mb-hint').textContent = '傾斜轉彎，B 油門、A 煞車。Chrome／Edge 按「連接 micro:bit」選 mbed Serial Port（最簡單）。電腦有跑橋接程式的話也可以按「用橋接程式連」。板子要先燒好程式（標題畫面有下載）。';
+  document.getElementById('mb-hint').textContent = '傾斜轉彎，B 油門、A 煞車。Chrome／Edge 按「連接 micro:bit」選 mbed Serial Port（最簡單）。電腦有跑橋接程式的話也可以按「用橋接程式連」。板子要先燒好下面的 .hex。';
 }
-const mbPanel = document.getElementById('mb-panel');
-function setMbCollapsed(c) { mbPanel.classList.toggle('collapsed', c); document.getElementById('mb-toggle').textContent = c ? '展開' : '收起'; }
-document.getElementById('mb-head').addEventListener('click', () => setMbCollapsed(!mbPanel.classList.contains('collapsed')));
-setMbCollapsed(window.innerWidth < 980);
 
-const btnMute = document.getElementById('btn-mute');
-btnMute.addEventListener('click', () => { setMuted(!isMuted()); btnMute.textContent = isMuted() ? '音效：關' : '音效：開'; });
 window.addEventListener('pointerdown', () => { bgmStart(); bgmSet(gameState === 'race' ? 'race' : 'title'); }, { once: true });
 window.addEventListener('keydown', () => { bgmStart(); bgmSet(gameState === 'race' ? 'race' : 'title'); }, { once: true });
 
@@ -1038,6 +1123,6 @@ if (loadEl.tip) loadEl.tip.textContent = '小提示：' + TIPS[Math.floor(Math.r
 boot();
 
 // 除錯口（測試用）：window.__game
-window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
+window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, openSettings, openStartDialog, openBoard, openTutorial, setMbOpen, setDifficulty, get difficulty() { return difficulty; }, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
   // 量 draw call：renderer.info 每次 render 會歸零，後製最後一道只有 1 個 call，所以只量場景那一道
   measure() { const r = renderer; r.info.autoReset = false; r.info.reset(); r.setRenderTarget(fx.enabled ? fx.rt : null); r.render(scene, camera); const o = { calls: r.info.render.calls, triangles: r.info.render.triangles, pixelRatio: r.getPixelRatio() }; r.info.autoReset = true; r.setRenderTarget(null); return o; } };
