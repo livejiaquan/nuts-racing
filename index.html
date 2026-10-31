@@ -253,6 +253,16 @@
   #banner { position:absolute; left:0; right:0; top:34%; text-align:center; font-size:52px; font-weight:900; letter-spacing:5px; color:var(--cream);
     text-shadow:0 6px 0 var(--forest-deep), 0 0 30px rgba(0,0,0,.4); opacity:0; pointer-events:none; }
   #banner.show { animation:bannerIn 1.8s cubic-bezier(.2,1,.3,1) both; }
+  #banner.nut { color:#FFB043; font-family:var(--num-font); font-size:60px; text-shadow:0 0 24px #FF9A3C, 0 6px 0 var(--orange-dark); }
+  #banner.shield { color:#9BE8FF; font-family:var(--num-font); font-size:60px; text-shadow:0 0 24px #59C8FF, 0 6px 0 #1E3F6B; }
+  #banner.missile { color:#FF7A7A; font-family:var(--num-font); font-size:60px; text-shadow:0 0 24px #D7262C, 0 6px 0 #5A1010; }
+  #banner.lightning { color:#FFF3A0; font-family:var(--num-font); font-size:64px; text-shadow:0 0 30px #FFD34D, 0 6px 0 #8B6B2E; }
+  /* 道具轉盤：燈號下方的小格 */
+  #item-slot { position:absolute; left:50%; top:104px; transform:translateX(-50%); width:84px; height:84px; border-radius:18px; background:rgba(20,61,34,.85); border:3px solid var(--card-border); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; box-shadow:0 8px 24px rgba(0,0,0,.35); }
+  #item-slot svg { width:44px; height:44px; }
+  #item-slot span { font-size:12px; font-weight:700; color:var(--cream); letter-spacing:1px; }
+  #item-slot.reveal { animation:slotPop .45s cubic-bezier(.2,1.4,.4,1) both; border-color:var(--gold); box-shadow:0 0 0 4px rgba(242,183,5,.35), 0 0 30px rgba(242,183,5,.6); }
+  @keyframes slotPop { 0% { transform:translateX(-50%) scale(.7); } 60% { transform:translateX(-50%) scale(1.25); } 100% { transform:translateX(-50%) scale(1); } }
   #banner.flash { color:#9BE8FF; font-family:var(--num-font); font-size:64px; text-shadow:0 0 30px #59C8FF, 0 6px 0 #1E3F6B; }
   #flash { position:fixed; inset:0; pointer-events:none; z-index:6; opacity:0; background:#9BE8FF; }
   #banner.good { color:#6CFF9A; } #banner.bad { color:#FF7A7A; } #banner.final { color:var(--gold); } #banner.boost { color:#FFB043; font-family:var(--num-font); font-size:64px; }
@@ -489,6 +499,7 @@
   <div class="card" id="hud-map"><canvas id="minimap" width="220" height="200"></canvas></div>
   <div class="card" id="hud-speed"><canvas id="gauge" width="240" height="140"></canvas></div>
   <button class="btn ghost" id="btn-pause">暫停<kbd>Esc</kbd></button>
+  <div id="item-slot" class="hide"></div>
   <div id="lights"><i></i><i></i><i></i><i></i><i></i></div>
   <div id="countdown"></div>
   <div id="banner"></div>
