@@ -131,6 +131,7 @@ window.addEventListener('keydown', e => {
     if (gameState === 'done' && !overlayOpen()) { startRace(); return; }
   }
   if (e.key === 'Escape' && closeOverlays()) return;
+  if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (gameState === 'race' || gameState === 'countdown')) { togglePause(); return; }
   if (typing(e)) return;
   const k = KEYMAP[e.key]; if (k) { keys[k] = true; e.preventDefault(); }
 });
@@ -589,52 +590,72 @@ function setLights(n, go) {
   for (let i = 0; i < dots.length; i++) dots[i].className = go ? 'on go' : (i < n ? 'on' : '');
 }
 
-let gaugeNeedle = 0;
+// 數位式時速表：上排換檔燈、中間大數字、下面一條弧形速度帶，右下三顆狀態燈。沒有指針
+let gaugeSpeed = 0, gaugeBlink = 0;
+function arcSeg(cx, cy, r, a0, a1, color, width, glow) {
+  gctx.strokeStyle = color; gctx.lineWidth = width;
+  gctx.shadowColor = glow ? color : 'transparent'; gctx.shadowBlur = glow ? 10 : 0;
+  gctx.beginPath(); gctx.arc(cx, cy, r, a0, a1); gctx.stroke();
+  gctx.shadowBlur = 0;
+}
 function drawGauge() {
   const W = el.gauge.width, H = el.gauge.height;
   gctx.clearRect(0, 0, W, H);
-  const cx = W / 2, cy = H - 44, R = 70;
   const kmh = Math.abs(player.speed) * 2.2, maxK = 170;
-  const pct = Math.min(1, kmh / maxK);
-  const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
-  gctx.lineWidth = 11; gctx.lineCap = 'butt';
-  gctx.strokeStyle = 'rgba(253,246,227,.16)';
-  gctx.beginPath(); gctx.arc(cx, cy, R, a0, a1); gctx.stroke();
-  const seg = (f0, f1, color) => { gctx.strokeStyle = color; gctx.beginPath(); gctx.arc(cx, cy, R, a0 + (a1 - a0) * f0, a0 + (a1 - a0) * f1); gctx.stroke(); };
-  seg(0, 0.6, '#49A86B'); seg(0.6, 0.82, '#E8C21A'); seg(0.82, 1, '#D7262C');
-  gctx.strokeStyle = 'rgba(253,246,227,.85)'; gctx.lineWidth = 2;
-  gctx.fillStyle = 'rgba(253,246,227,.8)'; gctx.font = '10px "Russo One",ui-monospace,monospace'; gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
-  for (let k = 0; k <= maxK; k += 10) {
-    const a = a0 + (a1 - a0) * (k / maxK), major = k % 50 === 0;
-    const r1 = R - 8, r2 = major ? R - 18 : R - 13;
-    gctx.beginPath(); gctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); gctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); gctx.stroke();
-    if (major) gctx.fillText(String(k), cx + Math.cos(a) * (R - 29), cy + Math.sin(a) * (R - 29));
+  gaugeSpeed += (kmh - gaugeSpeed) * 0.3;
+  const pct = Math.min(1, gaugeSpeed / maxK);
+  const boosting = player.boost > 0;
+  // 弧形速度帶：圓心在下面，只畫上半圈的一段
+  const cx = W / 2, cy = H - 14, R = 92;
+  const a0 = Math.PI * 1.12, a1 = Math.PI * 1.88;
+  gctx.lineCap = 'round';
+  arcSeg(cx, cy, R, a0, a1, 'rgba(253,246,227,.12)', 16, false);
+  gctx.lineCap = 'butt';
+  const N = 30, span = (a1 - a0), gap = span / N * 0.22;
+  const lit = pct * N;
+  for (let i = 0; i < N; i++) {
+    const f = i / N;
+    const col = boosting ? '#FFB043' : (f < 0.6 ? '#49E07A' : f < 0.82 ? '#FFD34D' : '#FF4B4B');
+    const on = i < lit;
+    const s0 = a0 + span * f + gap / 2, s1 = a0 + span * (i + 1) / N - gap / 2;
+    arcSeg(cx, cy, R, s0, s1, on ? col : 'rgba(253,246,227,.07)', on ? 12 : 8, on && i >= lit - 3);
   }
-  gaugeNeedle += (pct - gaugeNeedle) * 0.25;
-  const an = a0 + (a1 - a0) * gaugeNeedle;
-  gctx.strokeStyle = player.boost > 0 ? '#FF9A3C' : '#FF3B3B'; gctx.lineWidth = 3; gctx.lineCap = 'round';
-  gctx.beginPath(); gctx.moveTo(cx - Math.cos(an) * 10, cy - Math.sin(an) * 10); gctx.lineTo(cx + Math.cos(an) * (R - 16), cy + Math.sin(an) * (R - 16)); gctx.stroke();
-  gctx.fillStyle = '#FDF6E3'; gctx.beginPath(); gctx.arc(cx, cy, 5, 0, 7); gctx.fill();
+  // 大數字
+  gctx.textAlign = 'center'; gctx.textBaseline = 'alphabetic';
+  gctx.fillStyle = boosting ? '#FFB043' : '#FDF6E3';
+  gctx.shadowColor = boosting ? '#FF9A3C' : 'rgba(0,0,0,.4)'; gctx.shadowBlur = boosting ? 18 : 4;
+  gctx.font = '60px "Russo One",ui-monospace,monospace';
+  gctx.fillText(String(Math.round(gaugeSpeed)), cx, cy - 10);
+  gctx.shadowBlur = 0;
+  gctx.fillStyle = 'rgba(253,246,227,.6)'; gctx.font = '700 11px sans-serif'; gctx.fillText('km/h', cx, cy + 6);
+  // 檔位（左下）
   const gear = player.speed < 1 ? 'N' : Math.min(6, 1 + Math.floor(kmh / 28));
-  gctx.fillStyle = 'rgba(253,246,227,.7)'; gctx.font = '700 9px sans-serif'; gctx.fillText('GEAR', cx - 30, cy + 2);
-  gctx.fillStyle = '#FDF6E3'; gctx.font = '18px "Russo One",ui-monospace,monospace'; gctx.fillText(String(gear), cx - 30, cy + 16);
-  gctx.font = '26px "Russo One",ui-monospace,monospace'; gctx.textAlign = 'right'; gctx.fillText(String(Math.round(kmh)), cx + 30, cy + 14);
-  gctx.font = '700 9px sans-serif'; gctx.fillStyle = 'rgba(253,246,227,.7)'; gctx.textAlign = 'left'; gctx.fillText('km/h', cx + 34, cy + 16); gctx.textAlign = 'center';
+  gctx.fillStyle = 'rgba(253,246,227,.1)'; gctx.beginPath(); gctx.roundRect(10, H - 40, 40, 32, 8); gctx.fill();
+  gctx.fillStyle = 'rgba(253,246,227,.6)'; gctx.font = '700 9px sans-serif'; gctx.fillText('檔', 30, H - 30);
+  gctx.fillStyle = '#FDF6E3'; gctx.font = '20px "Russo One",ui-monospace,monospace'; gctx.fillText(String(gear), 30, H - 12);
+  // 狀態燈（右下）：油門、煞車、漂移／加速
   const lamp = (x, on, color, text) => {
     gctx.fillStyle = on ? color : 'rgba(253,246,227,.12)';
-    gctx.beginPath(); gctx.arc(x, H - 9, 5, 0, 7); gctx.fill();
-    if (on) { gctx.shadowColor = color; gctx.shadowBlur = 10; gctx.fill(); gctx.shadowBlur = 0; }
-    gctx.fillStyle = on ? '#FFF' : 'rgba(253,246,227,.5)'; gctx.font = '700 10px sans-serif'; gctx.fillText(text, x + 24, H - 9);
+    gctx.shadowColor = color; gctx.shadowBlur = on ? 10 : 0;
+    gctx.beginPath(); gctx.arc(x, H - 27, 5, 0, 7); gctx.fill(); gctx.shadowBlur = 0;
+    gctx.fillStyle = on ? '#FFF' : 'rgba(253,246,227,.45)'; gctx.font = '700 9px sans-serif'; gctx.fillText(text, x, H - 10);
   };
-  lamp(18, player.throttle && gameState === 'race', '#49E07A', '油門');
-  lamp(76, player.braking, '#FF3B3B', '煞車');
-  lamp(134, player.boost > 0 || player.drift !== 0, player.drift ? '#59C8FF' : '#FF9A3C', player.drift ? '漂移' : '加速');
-  const lit = Math.round(pct * 25);
-  for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-    const i = (4 - r) * 5 + c;
-    gctx.fillStyle = i < lit ? '#FF3B3B' : 'rgba(255,59,59,.15)';
-    gctx.fillRect(W - 34 + c * 6, 6 + r * 6, 4, 4);
+  lamp(W - 74, player.throttle && gameState === 'race', '#49E07A', '油門');
+  lamp(W - 48, player.braking, '#FF3B3B', '煞車');
+  lamp(W - 22, boosting || player.drift !== 0, player.drift ? '#59C8FF' : '#FF9A3C', player.drift ? '漂移' : '加速');
+  // 換檔燈：上面一排 9 顆，綠→黃→紅，接近極速全部閃藍
+  gaugeBlink += 0.25;
+  const n = 9, litN = Math.round(pct * n), redline = pct > 0.95;
+  for (let i = 0; i < n; i++) {
+    const x = cx - (n - 1) * 11 + i * 22;
+    let col = i < 3 ? '#49E07A' : i < 6 ? '#FFD34D' : '#FF4B4B';
+    let on = i < litN;
+    if (redline) { on = Math.sin(gaugeBlink) > 0; col = '#59C8FF'; }
+    gctx.fillStyle = on ? col : 'rgba(253,246,227,.1)';
+    gctx.shadowColor = col; gctx.shadowBlur = on ? 8 : 0;
+    gctx.beginPath(); gctx.roundRect(x - 7, 8, 14, 7, 3); gctx.fill();
   }
+  gctx.shadowBlur = 0;
 }
 
 const mini = { base: null, sx: 1, sz: 1, ox: 0, oz: 0 };
@@ -772,7 +793,7 @@ function say(racer, text, dur = 1.6) {
 const _proj = new THREE.Vector3();
 let bubbleLast = performance.now();
 function updateBubbles() {
-  const now = performance.now(), dt = Math.min(0.1, (now - bubbleLast) / 1000); bubbleLast = now;
+  const now = performance.now(), dt = paused ? 0 : Math.min(0.1, (now - bubbleLast) / 1000); bubbleLast = now;
   const W = window.innerWidth, H = window.innerHeight;
   for (const b of bubbles) {
     if (b.cool > 0) b.cool -= dt;
@@ -903,7 +924,7 @@ function closeTutorial() {
 }
 
 function startRace() {
-  exitGarage(); closeOverlays();
+  exitGarage(); closeOverlays(); if (paused) togglePause(false);
   resetRace();
   gameState = 'countdown'; lastCount = 4;
   coachStart(); el.coach.classList.remove('show');
@@ -954,6 +975,7 @@ function finishRace() {
 }
 
 function backToTitle() {
+  if (paused) togglePause(false);
   gameState = 'title';
   el.result.classList.add('hide'); el.hud.classList.add('hide');
   el.title.classList.remove('hide');
@@ -1154,6 +1176,7 @@ function frame(now) {
   let dt = (now - last) / 1000; last = now;
   const rawDt = dt;
   if (dt > 0.1) dt = 0.1;
+  if (paused) { dt = 0; acc = 0; }   // 暫停：時間不走，畫面照畫
   if (hitSlow > 0) { hitSlow -= dt; dt *= 0.35; }   // 撞到東西的一瞬間慢動作
 
   acc += dt;
@@ -1172,8 +1195,8 @@ function frame(now) {
   const shadowAt = (gameState === 'title' || gameState === 'loading') ? camera.position : player.pos;
   cullByDistance(camera.position, shadowAt);
   followShadow(lights.sun, shadowAt, ATMOS.sunDir);
-  engineUpdate(Math.min(1, Math.abs(player.speed) / MAX_SPEED), gameState === 'race');
-  skidUpdate(gameState === 'race' && (player.drift !== 0 || (Math.abs(player.steer) > 0.55 && player.speed > MAX_SPEED * 0.55) || (player.braking && player.speed > 20)) && !player.offroad);
+  engineUpdate(Math.min(1, Math.abs(player.speed) / MAX_SPEED), gameState === 'race' && !paused);
+  skidUpdate(gameState === 'race' && !paused && (player.drift !== 0 || (Math.abs(player.steer) > 0.55 && player.speed > MAX_SPEED * 0.55) || (player.braking && player.speed > 20)) && !player.offroad);
   if (gameState !== 'title') updateHUD(); else updateMbUI();
 
   updateDynamicRes(rawDt);
@@ -1277,7 +1300,27 @@ document.getElementById('btn-again').addEventListener('click', startRace);
 document.getElementById('btn-title').addEventListener('click', backToTitle);
 
 // ---------- 設定頁 ----------
-function openSettings() { if (gameState !== 'title' && gameState !== 'done') return; closeOverlays(); el.settings.classList.remove('hide'); SFX.click(); }
+function openSettings() { if (gameState !== 'title' && gameState !== 'done' && !paused) return; closeOverlays(); el.settings.classList.remove('hide'); SFX.click(); }
+
+// ---------- 暫停：Esc 或 P，HUD 右上也有一顆 ----------
+let paused = false;
+const pauseEl = document.getElementById('pause');
+function togglePause(force) {
+  const want = force === undefined ? !paused : force;
+  if (want === paused) return;
+  if (want && gameState !== 'race' && gameState !== 'countdown') return;
+  paused = want;
+  pauseEl.classList.toggle('hide', !paused);
+  if (!paused) el.settings.classList.add('hide');
+  bgmSet(paused ? 'title' : 'race');
+  SFX.click();
+}
+document.getElementById('btn-pause').addEventListener('click', () => togglePause(true));
+document.getElementById('pause-resume').addEventListener('click', () => togglePause(false));
+document.getElementById('pause-restart').addEventListener('click', () => { togglePause(false); startRace(); });
+document.getElementById('pause-settings').addEventListener('click', openSettings);
+document.getElementById('pause-title').addEventListener('click', () => { togglePause(false); backToTitle(); });
+pauseEl.addEventListener('click', e => { if (e.target === pauseEl) togglePause(false); });
 document.getElementById('btn-settings-close').addEventListener('click', () => { el.settings.classList.add('hide'); SFX.click(); });
 onSeg('seg-sound', v => { setMuted(v === 'off'); setSeg('seg-sound', v); }); setSeg('seg-sound', isMuted() ? 'off' : 'on');
 onSeg('seg-quality', q => { setQuality(q); dyn.slow = 0; }); setSeg('seg-quality', quality);
@@ -1318,6 +1361,6 @@ if (loadEl.tip) loadEl.tip.textContent = '小提示：' + TIPS[Math.floor(Math.r
 boot();
 
 // 除錯口（測試用）：window.__game
-window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, sel, selectCharacter, rebuildPlayer, CHARACTERS, KARTS, openSettings, openStartDialog, openBoard, openTutorial, setMbOpen, setDifficulty, setMood, say, face, drawFaceCam, updateFace, updateBubbles, coach, coachReset, get cornerList() { return cornerList; }, get difficulty() { return difficulty; }, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
+window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, sel, selectCharacter, rebuildPlayer, CHARACTERS, KARTS, openSettings, openStartDialog, openBoard, openTutorial, setMbOpen, setDifficulty, setMood, say, face, drawFaceCam, updateFace, updateBubbles, coach, coachReset, get cornerList() { return cornerList; }, get difficulty() { return difficulty; }, togglePause, get paused() { return paused; }, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
   // 量 draw call：renderer.info 每次 render 會歸零，後製最後一道只有 1 個 call，所以只量場景那一道
   measure() { const r = renderer; r.info.autoReset = false; r.info.reset(); r.setRenderTarget(fx.enabled ? fx.rt : null); r.render(scene, camera); const o = { calls: r.info.render.calls, triangles: r.info.render.triangles, pixelRatio: r.getPixelRatio() }; r.info.autoReset = true; r.setRenderTarget(null); return o; } };

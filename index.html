@@ -231,8 +231,17 @@
   #mb-chip b { font-family:var(--num-font); color:var(--gold); font-weight:400; }
   #hud-map { left:18px; bottom:18px; padding:8px; }
   #minimap { width:220px; height:200px; display:block; border-radius:10px; }
-  #hud-speed { right:18px; bottom:18px; width:216px; height:200px; padding:8px; text-align:center; }
-  #gauge { width:200px; height:180px; display:block; }
+  #hud-speed { right:18px; bottom:18px; width:256px; height:156px; padding:8px; text-align:center; }
+  #gauge { width:240px; height:140px; display:block; }
+  #btn-pause { position:absolute; left:50%; top:66px; transform:translateX(-50%); pointer-events:auto; font-size:13px; padding:6px 14px; opacity:.8; }
+  #btn-pause:hover { opacity:1; }
+  #btn-pause kbd { font-size:11px; padding:0 6px; min-width:0; margin-left:4px; }
+  /* 暫停選單 */
+  #pause .dlg { width:min(380px, 92vw); align-items:stretch; text-align:center; }
+  #pause .dlg h2 { font-size:34px; letter-spacing:8px; text-align:center; }
+  #pause .menu { width:100%; margin:4px auto 0; gap:10px; }
+  #pause .menu .btn { font-size:21px; padding:11px 16px 11px 14px; }
+  #pause .menu .btn.ghost { background:#fff; color:var(--forest); box-shadow:inset 0 0 0 2px rgba(30,86,49,.45); border-color:transparent; }
   #lights { position:absolute; left:50%; top:16px; transform:translateX(-50%); display:flex; gap:12px; background:rgba(20,61,34,.6); padding:8px 14px; border-radius:999px; border:2px solid rgba(253,246,227,.5); }
   #lights i { width:30px; height:30px; border-radius:50%; background:rgba(20,20,20,.8); border:3px solid rgba(253,246,227,.4); transition:background .1s, box-shadow .1s; }
   #lights i.on { background:#FF2E2E; box-shadow:0 0 22px #FF2E2E; }
@@ -382,6 +391,20 @@
   </div>
 </div>
 
+<!-- 暫停選單 -->
+<div id="pause" class="modal hide">
+  <div class="dlg">
+    <h2>暫停</h2>
+    <div class="menu">
+      <button class="btn" id="pause-resume"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>繼續</button>
+      <button class="btn ghost" id="pause-restart"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>重新開始</button>
+      <button class="btn ghost" id="pause-settings"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3 1a7.7 7.7 0 0 0-1.8-1L15 3.5H9l-.3 2.6a7.7 7.7 0 0 0-1.8 1l-2.3-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-1c.6.4 1.2.8 1.8 1l.3 2.6h6l.3-2.6c.6-.2 1.2-.6 1.8-1l2.3 1 2-3.4-2-1.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>設定</button>
+      <button class="btn ghost" id="pause-title"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-3v9h-5v-6h-2v6H6v-9H3z"/></svg>回首頁</button>
+    </div>
+    <div class="tiny">按 Esc 或 P 可以繼續</div>
+  </div>
+</div>
+
 <!-- 排行榜：右側滑出 -->
 <div id="board-drawer" class="drawer">
   <div class="board-head"><h2>排行榜</h2><button class="btn ghost" id="btn-board-close">關閉</button></div>
@@ -461,7 +484,8 @@
   <div class="card" id="hud-nutcard"><i></i><span id="hud-nuts">0</span></div>
   <div class="card hide" id="mb-chip"><i></i>micro:bit 已連線　傾斜 <b id="mb-chip-tilt">0</b>°</div>
   <div class="card" id="hud-map"><canvas id="minimap" width="220" height="200"></canvas></div>
-  <div class="card" id="hud-speed"><canvas id="gauge" width="200" height="180"></canvas></div>
+  <div class="card" id="hud-speed"><canvas id="gauge" width="240" height="140"></canvas></div>
+  <button class="btn ghost" id="btn-pause">暫停<kbd>Esc</kbd></button>
   <div id="lights"><i></i><i></i><i></i><i></i><i></i></div>
   <div id="countdown"></div>
   <div id="banner"></div>
