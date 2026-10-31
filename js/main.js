@@ -8,7 +8,8 @@ import { loadModels, MODELS, cullByDistance, buildChunks, CHUNKS } from './model
 import { buildAtmosphere, setTimeOfDay, ATMOS, PRESETS, sunOnScreen, updateWater } from './atmos.js';
 import { buildTraffic, updateTraffic } from './traffic.js';
 import { ROADS } from './osm_data.js';
-import { KART_COLORS, buildKart, animateKart, setDriver } from './kart.js';
+import { KART_COLORS, animateKart, setDriver } from './kart.js';
+import { CHARACTERS, KARTS, STAT_NAMES, totalStats } from './garage.js';
 import { parseDriver, fitDriver, guessRot, saveDriver, loadSavedDriver, clearSavedDriver } from './driver.js';
 import * as MBit from './microbit.js';
 import { SFX, engineStart, engineUpdate, bgmStart, bgmSet, setMuted, isMuted, skidUpdate, audioState } from './audio.js';
@@ -59,8 +60,8 @@ async function stage(pct, text, fn) {
 }
 
 // ---------- 車輛 ----------
-function makeRacer(colorHex) {
-  const k = buildKart(colorHex);
+function makeRacer(colorHex, kartDef = KARTS[0]) {
+  const k = kartDef.build(colorHex);
   scene.add(k.group);
   return {
     kart: k, pos: new THREE.Vector3(), vel: new THREE.Vector3(), heading: 0, speed: 0, prevSpeed: 0,
@@ -70,8 +71,19 @@ function makeRacer(colorHex) {
   };
 }
 
-let playerColorIdx = 0;
 let player = null;
+// 車庫選的東西（記在這台電腦）：角色、車款、顏色（KART_COLORS 的 index）
+const GARAGE_KEY = 'nuts-racing-garage-v1';
+const sel = { character: 'squirrel', kart: KARTS[0].id, color: 0 };
+function loadGarageSel() {
+  try { Object.assign(sel, JSON.parse(localStorage.getItem(GARAGE_KEY) || '{}')); } catch (e) {}
+  if (!CHARACTERS.find(c => c.id === sel.character)) sel.character = CHARACTERS[0].id;
+  if (!KARTS.find(k => k.id === sel.kart)) sel.kart = KARTS[0].id;
+  sel.color = Math.max(0, Math.min(KART_COLORS.length - 1, sel.color | 0));
+}
+function saveGarageSel() { try { localStorage.setItem(GARAGE_KEY, JSON.stringify(sel)); } catch (e) {} }
+function currentCharacter() { return CHARACTERS.find(c => c.id === sel.character) || CHARACTERS[0]; }
+function currentKart() { return KARTS.find(k => k.id === sel.kart) || KARTS[0]; }
 const rivals = [];
 const rivalPalette = [0x3F8FD6, 0x8E4FC0, 0xE8C21A, 0x2E8B57, 0xF07AA8];
 
@@ -480,16 +492,13 @@ const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 let titleAngle = 0;
 function updateCamera(dt) {
   if (gameState === 'title' && garage.on) {
-    // 車庫：鏡頭繞著玩家的車慢慢轉，車子放在畫面右邊，左下角是工具列
+    // 車庫：鏡頭繞著玩家的車慢慢轉，車放在畫面正中間（左右兩邊是選項和數值）
     if (garage.drag) garage.idle = 0; else { garage.idle += dt; if (garage.idle > 1.5) garage.angle += dt * 0.35; }
     const kp = player.kart.group.position;
-    const R = 9.0, H = 3.2;
+    const R = 10.5, H = 3.6;
     camPos.set(kp.x + Math.sin(garage.angle) * R, kp.y + H, kp.z + Math.cos(garage.angle) * R);
     camera.position.lerp(camPos, 1 - Math.exp(-dt * 4));
-    // 看的點往鏡頭的左邊偏一點，車就會落在畫面右半邊（工具列在左下角）
-    tmpF.subVectors(kp, camera.position); tmpF.y = 0; tmpF.normalize();
-    tmpR.set(-tmpF.z, 0, tmpF.x);   // 鏡頭的右手邊 = forward × up
-    camLook.set(kp.x, kp.y + 1.3, kp.z).addScaledVector(tmpR, -2.0);
+    camLook.set(kp.x, kp.y + 1.0, kp.z);
     camera.lookAt(camLook);
     camera.fov += (44 - camera.fov) * Math.min(1, dt * 5);
     camera.updateProjectionMatrix();
@@ -825,7 +834,7 @@ function finishRace() {
   gameState = 'done';
   SFX.finish(); bgmSet('title');
   const rank = computeRank();
-  const rows = [{ name: '你', time: player.finishTime, prog: progressOf(player), me: true, color: '#' + KART_COLORS[playerColorIdx].hex.toString(16).padStart(6, '0') }];
+  const rows = [{ name: '你', time: player.finishTime, prog: progressOf(player), me: true, color: '#' + KART_COLORS[sel.color].hex.toString(16).padStart(6, '0') }];
   for (const r of rivals) rows.push({ name: r.name, time: r.finishTime, prog: progressOf(r), color: '#' + r.kart.color.getHexString() });
   rows.sort((a, b) => (a.time && b.time) ? a.time - b.time : (a.time ? -1 : b.time ? 1 : b.prog - a.prog));
   const best = Math.min(...player.laps);
@@ -852,48 +861,76 @@ function backToTitle() {
   resetRace();
 }
 
+// ---------- 車庫介面：左邊角色／車款／顏色，右邊五條數值 ----------
 function buildSwatches() {
   el.swatches.innerHTML = '';
   KART_COLORS.forEach((c, i) => {
     const b = document.createElement('button');
-    b.className = 'swatch' + (i === playerColorIdx ? ' on' : '');
+    b.className = 'swatch' + (i === sel.color ? ' on' : '');
     b.style.background = '#' + c.hex.toString(16).padStart(6, '0');
     b.title = c.name;
-    b.addEventListener('click', () => { setPlayerColor(i); SFX.click(); });
+    b.addEventListener('click', () => { sel.color = i; saveGarageSel(); rebuildPlayer(); SFX.click(); });
     el.swatches.appendChild(b);
   });
-  el.colorName.textContent = KART_COLORS[playerColorIdx].name;
+  el.colorName.textContent = KART_COLORS[sel.color].name;
 }
-function setPlayerColor(i) {
-  playerColorIdx = i;
+// 顏色或車款變了：把玩家的車整台重建，位置、角色照舊
+function rebuildPlayer() {
   scene.remove(player.kart.group);
   const old = player;
-  player = makeRacer(KART_COLORS[i].hex);
+  player = makeRacer(KART_COLORS[sel.color].hex, currentKart());
   player.pos.copy(old.pos); player.heading = old.heading; player.hint = old.hint;
   player.kart.group.position.copy(player.pos); player.kart.group.rotation.y = player.heading;
-  buildSwatches();
   applyDriver();
+  renderGarageUI();
+}
+function tile(def, on, onClick) {
+  const b = document.createElement('button');
+  b.className = 'gtile' + (on ? ' on' : '');
+  b.innerHTML = '<i>' + def.icon + '</i><span>' + def.name + '</span>';
+  b.title = def.desc || '';
+  b.addEventListener('click', onClick);
+  return b;
+}
+function renderGarageUI() {
+  const chars = document.getElementById('g-chars'), karts = document.getElementById('g-karts');
+  chars.innerHTML = ''; karts.innerHTML = '';
+  for (const c of CHARACTERS) chars.appendChild(tile(c, c.id === sel.character, () => selectCharacter(c)));
+  for (const k of KARTS) karts.appendChild(tile(k, k.id === sel.kart, () => { sel.kart = k.id; saveGarageSel(); rebuildPlayer(); SFX.click(); }));
+  buildSwatches();
+  const ch = currentCharacter(), kart = currentKart(), st = totalStats(ch, kart);
+  document.getElementById('g-stats').innerHTML = STAT_NAMES.map(([k, name]) => '<div class="stat-row"><span>' + name + '</span><div class="pips">' + [1, 2, 3, 4, 5].map(i => '<i class="' + (i <= st[k] ? 'on' : '') + '"></i>').join('') + '</div><b>' + st[k] + '</b></div>').join('');
+  document.getElementById('g-pick').innerHTML = '<b>' + ch.name + '</b>　' + ch.desc + '<br><b>' + kart.name + '</b>　' + kart.desc;
+  // 上傳角色的工具：選「我的角色」才出現；還沒上傳就只有「選檔案」
+  const upload = document.getElementById('g-upload');
+  upload.hidden = !ch.upload;
+  drvEl.tools.hidden = !driver.rec;
+}
+function selectCharacter(c) {
+  sel.character = c.id; saveGarageSel();
+  applyDriver(); renderGarageUI(); SFX.click();
+  if (c.upload && !driver.rec) drvEl.file.click();   // 選「我的角色」但還沒有檔：直接開選檔視窗
 }
 
 // ---------- 自訂角色（學生上傳的 OBJ／STL／GLB 坐在駕駛座） ----------
 const driver = { group: null, colorMats: [], rec: null };   // rec = { name, buffer, color, rot }
 const drvEl = { btn: document.getElementById('btn-driver'), file: document.getElementById('driver-file'), tools: document.getElementById('garage-tools'), color: document.getElementById('driver-color'), name: document.getElementById('driver-name'), size: document.getElementById('driver-size'), sizeVal: document.getElementById('driver-size-val') };
-// 車庫鏡頭：看自己的車和角色。on 的時候 updateCamera 繞著車轉；拖曳畫面可以手動轉
+// 車庫：整頁。on 的時候 updateCamera 繞著車轉；拖曳畫面可以手動轉
 const garage = { on: false, angle: 2.6, idle: 9, drag: null };
 const garageEl = document.getElementById('garage');
 function enterGarage() {
   if (gameState !== 'title' || garage.on) return;
   garage.on = true; garage.idle = 9;
-  el.title.classList.add('garage'); garageEl.hidden = false;
   closeOverlays(); showGear(false);
-  drvEl.tools.hidden = !driver.rec;
+  renderGarageUI();
+  el.title.classList.add('hide'); garageEl.classList.remove('hide');
   SFX.click();
 }
 function exitGarage() {
   if (!garage.on) return;
   garage.on = false; garage.drag = null;
-  el.title.classList.remove('garage'); garageEl.hidden = true;
-  if (gameState === 'title') showGear(true);
+  garageEl.classList.add('hide');
+  if (gameState === 'title') { el.title.classList.remove('hide'); showGear(true); }
 }
 canvas.addEventListener('pointerdown', e => { if (garage.on) { garage.drag = { x: e.clientX, a: garage.angle }; canvas.setPointerCapture(e.pointerId); } });
 canvas.addEventListener('pointermove', e => { if (garage.drag) garage.angle = garage.drag.a - (e.clientX - garage.drag.x) * 0.012; });
@@ -904,7 +941,8 @@ function applyDriverSize() {
   if (driver.group) driver.group.scale.setScalar(sc);
   drvEl.size.value = Math.round(sc * 100); drvEl.sizeVal.textContent = Math.round(sc * 100) + '%';
 }
-function applyDriver() { if (player) setDriver(player.kart, driver.group); }
+// 把選到的角色放上駕駛座：角色的 build 回 null 就是用內建松鼠
+function applyDriver() { if (player) setDriver(player.kart, currentCharacter().build({ driverGroup: driver.group })); }
 function driverStatus(text) { drvEl.name.textContent = text; }
 async function useDriver(rec, persist) {
   const { inner, tris, colorMats } = await parseDriver(rec.name, rec.buffer, rec.color);
@@ -914,17 +952,18 @@ async function useDriver(rec, persist) {
   driver.group = group; driver.colorMats = colorMats; driver.rec = rec;
   applyDriverSize();
   applyDriver();
-  drvEl.tools.hidden = false; drvEl.color.value = rec.color; drvEl.color.style.display = colorMats.length ? '' : 'none';
-  driverStatus(rec.name + '（' + (tris >= 10000 ? (tris / 10000).toFixed(1) + ' 萬' : tris) + ' 個三角形）' + (colorMats.length ? '，沒有自帶顏色，用左邊的色票改' : ''));
-  if (persist) { saveDriver(rec); enterGarage(); }   // 上傳完直接看
+  drvEl.color.value = rec.color; drvEl.color.style.display = colorMats.length ? '' : 'none';
+  driverStatus(rec.name + '（' + (tris >= 10000 ? (tris / 10000).toFixed(1) + ' 萬' : tris) + ' 個三角形）' + (colorMats.length ? '，沒有自帶顏色，用色票改' : ''));
+  if (persist) { saveDriver(rec); sel.character = 'custom'; saveGarageSel(); applyDriver(); }   // 剛上傳的直接選起來
+  renderGarageUI();
 }
 function clearDriver() {
   driver.group = null; driver.colorMats = []; driver.rec = null;
-  applyDriver(); clearSavedDriver();
-  drvEl.tools.hidden = true; driverStatus('預設是松鼠。可以放自己做的 .obj／.stl／.glb');
+  clearSavedDriver();
+  sel.character = CHARACTERS[0].id; saveGarageSel();
+  applyDriver(); driverStatus('可以放自己做的 .obj／.stl／.glb'); renderGarageUI();
 }
 drvEl.btn.addEventListener('click', () => drvEl.file.click());
-document.getElementById('btn-garage').addEventListener('click', enterGarage);
 document.getElementById('btn-garage-done').addEventListener('click', () => { exitGarage(); SFX.click(); });
 drvEl.size.addEventListener('input', () => { if (!driver.rec) return; driver.rec.scale = drvEl.size.value / 100; applyDriverSize(); });
 drvEl.size.addEventListener('change', () => { if (driver.rec) saveDriver(driver.rec); });
@@ -1092,13 +1131,14 @@ async function bootStages() {
     skid = new SkidMarks(scene);
   });
   await stage(92, '車子進場', () => {
-    player = makeRacer(KART_COLORS[0].hex);
+    loadGarageSel();
+    player = makeRacer(KART_COLORS[sel.color].hex, currentKart());
     for (let i = 0; i < RIVAL_COUNT; i++) {
       const r = makeRacer(rivalPalette[i]);
       r.u = 0; r.lat = 0; r.targetLat = 0; r.base = 0; r.wobble = Math.random() * 10; r.bump = 0; r.name = ['藍藍', '紫紫', '黃黃', '綠綠', '粉粉'][i];
       rivals.push(r);
     }
-    resetRace(); buildMinimap(); buildSwatches();
+    resetRace(); buildMinimap(); renderGarageUI();
     fx = new PostFX(renderer, scene, camera); resize();
   });
   await stage(100, '好了', null);
@@ -1174,6 +1214,6 @@ if (loadEl.tip) loadEl.tip.textContent = '小提示：' + TIPS[Math.floor(Math.r
 boot();
 
 // 除錯口（測試用）：window.__game
-window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, openSettings, openStartDialog, openBoard, openTutorial, setMbOpen, setDifficulty, coach, coachReset, get cornerList() { return cornerList; }, get difficulty() { return difficulty; }, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
+window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, sel, selectCharacter, rebuildPlayer, CHARACTERS, KARTS, openSettings, openStartDialog, openBoard, openTutorial, setMbOpen, setDifficulty, coach, coachReset, get cornerList() { return cornerList; }, get difficulty() { return difficulty; }, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
   // 量 draw call：renderer.info 每次 render 會歸零，後製最後一道只有 1 個 call，所以只量場景那一道
   measure() { const r = renderer; r.info.autoReset = false; r.info.reset(); r.setRenderTarget(fx.enabled ? fx.rt : null); r.render(scene, camera); const o = { calls: r.info.render.calls, triangles: r.info.render.triangles, pixelRatio: r.getPixelRatio() }; r.info.autoReset = true; r.setRenderTarget(null); return o; } };
