@@ -53,7 +53,7 @@
   .load-title { font-size:64px; font-weight:900; letter-spacing:8px; text-shadow:0 6px 0 var(--forest-deep); }
   .load-title span { color:var(--orange); }
   .load-sub { font-family:var(--num-font); letter-spacing:6px; font-size:14px; opacity:.7; margin-top:-10px; }
-  .load-track { width:min(460px, 80vw); height:16px; background:rgba(253,246,227,.15); border-radius:10px; overflow:hidden; border:2px solid rgba(253,246,227,.45); }
+  .load-track { width:min(460px, 80vw); height:16px; background:rgba(253,246,227,.15); border-radius:10px; overflow:hidden; border:2px solid rgba(253,246,227,.45); box-shadow:0 0 0 6px rgba(14,42,23,.6), 0 0 0 9px rgba(253,246,227,.2); }
   #load-bar { height:100%; width:0; background:linear-gradient(90deg, #49A86B, var(--gold), var(--orange)); transition:width .25s; }
   #load-pct { opacity:.9; } #load-tip { font-size:14px; opacity:.7; margin-top:6px; }
 
@@ -61,21 +61,33 @@
   #title { position:fixed; inset:0; z-index:10; display:flex; align-items:center; padding:0 6vw;
     background:linear-gradient(90deg, rgba(14,42,23,.9) 0%, rgba(14,42,23,.7) 34%, rgba(14,42,23,.12) 58%, rgba(14,42,23,0) 78%); }
   .title-col { width:min(480px, 88vw); display:flex; flex-direction:column; gap:22px; }
-  #title h1 { margin:0; font-size:clamp(60px, 7vw, 96px); line-height:1; letter-spacing:8px; color:var(--cream); font-weight:900; white-space:nowrap;
-    text-shadow:0 8px 0 var(--forest-deep), 0 0 50px rgba(232,116,59,.45); }
+  #title h1 { margin:0; font-size:clamp(60px, 7vw, 96px); line-height:1; letter-spacing:6px; color:var(--cream); font-weight:900; white-space:nowrap; transform:skewX(-7deg); transform-origin:left bottom;
+    text-shadow:0 7px 0 var(--forest-deep), 0 11px 0 rgba(0,0,0,.28), 0 0 50px rgba(232,116,59,.5); }
   #title h1 span { color:var(--orange); }
-  .title-en { font-family:var(--num-font); font-size:clamp(13px, 1.4vw, 17px); letter-spacing:5px; color:var(--gold); margin-top:-2px; white-space:nowrap; }
-  .menu { display:flex; flex-direction:column; gap:12px; width:min(320px, 80vw); }
-  .menu .btn { justify-content:center; font-size:26px; padding:14px 20px; letter-spacing:6px; border-radius:16px; }
-  .menu .btn svg { width:26px; height:26px; flex:none; }
+  .title-strip { display:flex; align-items:center; gap:12px; margin-top:8px; }
+  .checker { flex:1; height:9px; border-radius:3px; background:repeating-conic-gradient(var(--cream) 0 25%, var(--forest-deep) 0 50%) 0 0/18px 18px; box-shadow:0 2px 0 rgba(0,0,0,.3); }
+  .title-en { font-family:var(--num-font); font-size:clamp(13px, 1.4vw, 17px); letter-spacing:5px; color:var(--gold); white-space:nowrap; }
+  .menu { display:flex; flex-direction:column; gap:12px; width:min(330px, 80vw); margin-top:6px; }
+  .menu .btn { position:relative; justify-content:flex-start; font-size:25px; padding:12px 18px 12px 14px; letter-spacing:5px; border-radius:14px; transform:skewX(-7deg); overflow:hidden; border:2px solid rgba(253,246,227,.35); }
+  .menu .btn > * { transform:skewX(7deg); }
+  .menu .btn svg { width:22px; height:22px; flex:none; background:rgba(14,42,23,.35); border-radius:50%; padding:7px; box-sizing:content-box; margin-right:4px; }
+  .menu .btn::after { content:''; position:absolute; top:0; bottom:0; left:-60%; width:40%; background:linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); transform:skewX(-7deg); transition:left .5s; }
+  .menu .btn:hover::after { left:120%; }
+  .menu .btn:hover { transform:skewX(-7deg) translateX(6px); }
+  .menu .btn:active { transform:skewX(-7deg) translateX(6px) translateY(4px); }
+  #btn-start { box-shadow:0 5px 0 var(--orange-dark), 0 8px 18px rgba(0,0,0,.25), 0 0 0 0 rgba(232,116,59,.6); animation:fadeUp .6s cubic-bezier(.2,1,.3,1) both, glowPulse 1.8s 1s ease-in-out infinite; }
+  @keyframes glowPulse { 0%, 100% { box-shadow:0 5px 0 var(--orange-dark), 0 8px 18px rgba(0,0,0,.25), 0 0 0 0 rgba(232,116,59,.55); } 50% { box-shadow:0 5px 0 var(--orange-dark), 0 8px 18px rgba(0,0,0,.25), 0 0 0 10px rgba(232,116,59,0); } }
   .btn.green { background:linear-gradient(180deg, #2E7A45, var(--forest)); box-shadow:0 5px 0 var(--forest-deep), 0 8px 18px rgba(0,0,0,.25); }
   .btn.green:active { box-shadow:0 1px 0 var(--forest-deep), 0 3px 8px rgba(0,0,0,.25); }
+  .title-foot { display:flex; align-items:center; gap:14px; }
+  .title-foot .pill { display:inline-flex; align-items:center; gap:8px; font-size:12px; letter-spacing:1px; opacity:.85; }
+  .title-foot .pill i { width:8px; height:8px; border-radius:50%; background:var(--gold); display:inline-block; box-shadow:0 0 8px var(--gold); }
   .link { color:var(--gold); font-weight:700; text-decoration:none; border-bottom:1.5px dashed rgba(242,183,5,.6); font-size:15px; cursor:pointer; width:max-content; }
   .link:hover { border-bottom-style:solid; }
   #title .title-col > * { animation:fadeUp .6s cubic-bezier(.2,1,.3,1) both; }
   #title .title-col > *:nth-child(2) { animation-delay:.08s; } #title .title-col > *:nth-child(3) { animation-delay:.16s; }
   @keyframes fadeUp { from { transform:translateY(26px); opacity:0; } to { transform:none; opacity:1; } }
-  @media (max-height: 640px) { #title h1 { font-size:60px; } .title-col { gap:14px; } .menu { gap:9px; } .menu .btn { font-size:22px; padding:11px 18px; } }
+  @media (max-height: 640px) { #title h1 { font-size:60px; } .title-col { gap:14px; } .menu { gap:9px; } .menu .btn { font-size:22px; padding:10px 16px 10px 12px; } }
   #brand { position:fixed; left:6vw; bottom:18px; font-size:12px; letter-spacing:3px; opacity:.55; z-index:11; font-family:var(--num-font); }
 
   /* 右上角：只有一顆齒輪 */
@@ -85,9 +97,10 @@
 
   /* ---------- 開始比賽小視窗 ---------- */
   .modal { position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center; background:rgba(14,42,23,.6); backdrop-filter:blur(3px); }
-  .dlg { background:var(--cream); color:var(--ink); border-radius:22px; padding:26px 30px; width:min(440px, 92vw); display:flex; flex-direction:column; gap:14px;
-    box-shadow:0 20px 60px rgba(0,0,0,.4); animation:fadeUp .3s cubic-bezier(.2,1,.3,1) both; }
-  .dlg h2 { margin:0; font-size:26px; color:var(--forest); font-weight:900; letter-spacing:1px; }
+  .dlg { position:relative; background:var(--cream); color:var(--ink); border-radius:22px; padding:30px 30px 24px; width:min(440px, 92vw); display:flex; flex-direction:column; gap:14px; overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.4), 0 0 0 4px rgba(253,246,227,.25); animation:fadeUp .3s cubic-bezier(.2,1,.3,1) both; }
+  .dlg::before { content:''; position:absolute; left:0; right:0; top:0; height:12px; background:repeating-conic-gradient(var(--forest) 0 25%, var(--cream) 0 50%) 0 0/24px 24px; }
+  .dlg h2 { margin:0; font-size:28px; color:var(--forest); font-weight:900; letter-spacing:1px; transform:skewX(-5deg); }
   .dlg h2 span { color:var(--orange); }
   .dlg .label { color:var(--forest); opacity:.8; }
   #player-name { font-size:20px; padding:10px 14px; border-radius:12px; border:2px solid rgba(30,86,49,.3); background:#fff; color:var(--ink); outline:none; width:100%; }
@@ -104,9 +117,12 @@
   /* ---------- 整頁（設定、車庫） ---------- */
   .page { position:fixed; inset:0; z-index:15; background:linear-gradient(180deg, rgba(14,42,23,.95), rgba(14,42,23,.88)); display:flex; flex-direction:column; overflow:auto; }
   .page-head { display:flex; align-items:center; gap:16px; padding:16px 24px 10px; }
-  .page-head h2 { margin:0; font-size:30px; letter-spacing:6px; font-weight:900; flex:1; }
+  .page-head h2 { margin:0; font-size:32px; letter-spacing:6px; font-weight:900; flex:1; transform:skewX(-7deg); text-shadow:0 4px 0 var(--forest-deep); position:relative; padding-left:16px; }
+  .page-head h2::before { content:''; position:absolute; left:0; top:4px; bottom:4px; width:6px; background:var(--orange); border-radius:3px; }
+  .page-head::after { content:''; position:absolute; left:24px; right:24px; top:62px; height:6px; background:repeating-conic-gradient(rgba(253,246,227,.6) 0 25%, transparent 0 50%) 0 0/12px 12px; opacity:.5; }
+  .page-head { position:relative; padding-bottom:16px; }
   .page-body { padding:0 24px 24px; width:min(720px, 100%); margin:0 auto; display:flex; flex-direction:column; gap:10px; }
-  .srow { display:flex; align-items:center; gap:16px; background:rgba(253,246,227,.07); border:1.5px solid rgba(253,246,227,.18); border-radius:14px; padding:11px 18px; }
+  .srow { display:flex; align-items:center; gap:16px; background:rgba(253,246,227,.07); border:1.5px solid rgba(253,246,227,.18); border-left:5px solid var(--orange); border-radius:14px; padding:11px 18px; }
   .srow .sname { min-width:96px; font-size:18px; font-weight:700; }
   .srow .sdesc { font-size:13px; opacity:.7; flex:1; line-height:1.4; }
   .srow .seg { width:240px; flex:none; }
@@ -116,7 +132,7 @@
   @media (max-width: 860px) { .srow .seg { width:200px; } }
 
   /* 設定裡的 micro:bit 區塊：預設收合 */
-  #mb-sec { background:rgba(253,246,227,.07); border:1.5px solid rgba(253,246,227,.18); border-radius:14px; }
+  #mb-sec { background:rgba(253,246,227,.07); border:1.5px solid rgba(253,246,227,.18); border-left:5px solid rgba(253,246,227,.35); border-radius:14px; }
   #mb-sec-head { display:flex; align-items:center; gap:14px; padding:11px 18px; cursor:pointer; }
   #mb-sec-head .sname { min-width:96px; font-size:18px; font-weight:700; }
   #mb-sec-head .sdesc { flex:1; font-size:13px; opacity:.7; }
@@ -155,7 +171,7 @@
   .gcol { display:flex; flex-direction:column; gap:12px; max-height:100%; overflow:auto; }
   .gcol.left { width:min(300px, 36vw); }
   .gcol.right { width:min(260px, 30vw); }
-  .grow { background:rgba(20,61,34,.78); border:2px solid rgba(253,246,227,.35); border-radius:14px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+  .grow { background:rgba(20,61,34,.78); border:2px solid rgba(253,246,227,.35); border-left:5px solid var(--orange); border-radius:14px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
   .grow .label { color:var(--gold); }
   .gtiles { display:flex; gap:8px; flex-wrap:wrap; }
   .gtile { width:72px; cursor:pointer; border:0; background:none; padding:0; display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--cream); font-family:var(--ui-font); font-size:12px; }
@@ -210,7 +226,7 @@
   #hud-nutcard { right:18px; top:18px; font-family:var(--num-font); font-size:26px; display:flex; align-items:center; gap:10px; padding:8px 18px; }
   #hud-nutcard i { width:24px; height:28px; background:linear-gradient(90deg, #E8923A 45%, #F8CC8E 55%); border-radius:50% 50% 50% 50% / 42% 42% 58% 58%; display:inline-block; position:relative; box-shadow:0 0 0 2px #fff; }
   #hud-nutcard i::before { content:''; position:absolute; left:-2px; right:-2px; top:-1px; height:12px; background:#5A3A1E; border-radius:50% 50% 30% 30% / 70% 70% 30% 30%; }
-  #mb-chip { right:18px; top:74px; font-size:13px; padding:6px 12px; display:flex; align-items:center; gap:8px; border-width:2px; }
+  #mb-chip { left:18px; top:138px; font-size:13px; padding:6px 12px; display:flex; align-items:center; gap:8px; border-width:2px; }
   #mb-chip i { width:8px; height:8px; border-radius:50%; background:#3BFF7A; box-shadow:0 0 8px #3BFF7A; }
   #mb-chip b { font-family:var(--num-font); color:var(--gold); font-weight:400; }
   #hud-map { left:18px; bottom:18px; padding:8px; }
@@ -275,6 +291,22 @@
   #ctrl-hint kbd { font-size:13px; } #ctrl-hint .mbk { background:var(--forest); color:#fff; border-radius:6px; padding:1px 8px; font-weight:700; font-size:14px; border:1px solid rgba(253,246,227,.5); }
   #ctrl-hint .mbk.a { background:#D7262C; } #ctrl-hint .mbk.b { background:#49A86B; }
   #ctrl-hint .sep { opacity:.4; }
+  /* 車手臉部小畫面：右上角核果數下面（像後照鏡），畫布直接畫在框裡 */
+  #facecam { position:absolute; right:18px; top:72px; width:232px; height:138px; border:4px solid var(--card-border); border-radius:16px; background:rgba(20,61,34,.5);
+    box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 0 0 2px rgba(20,61,34,.6); pointer-events:none; }
+  #facecam .fc-tag { position:absolute; left:10px; top:-13px; background:var(--orange); color:#fff; font-size:12px; letter-spacing:2px; padding:2px 10px; border-radius:999px; box-shadow:0 2px 0 var(--orange-dark); }
+  #facecam .fc-mood { position:absolute; right:10px; top:-13px; background:var(--cream); color:var(--forest); font-size:12px; font-weight:700; padding:2px 10px; border-radius:999px; opacity:0; transition:opacity .2s; }
+  #facecam[data-mood="happy"] .fc-mood::before { content:'開心'; } #facecam[data-mood="ouch"] .fc-mood::before { content:'哎呀'; }
+  #facecam[data-mood="focus"] .fc-mood::before { content:'專心'; } #facecam[data-mood="worried"] .fc-mood::before { content:'後面有人！'; }
+  #facecam:not([data-mood="normal"]) .fc-mood { opacity:1; }
+  #facecam[data-mood="worried"] { border-color:#FFB043; }
+  @media (max-height: 640px) { #facecam { width:196px; height:116px; } }
+  /* 對話泡泡 */
+  #bubbles { position:absolute; inset:0; overflow:hidden; }
+  .bubble { position:absolute; left:0; top:0; background:var(--cream); color:var(--forest); font-weight:700; font-size:16px; padding:6px 14px; border-radius:14px; white-space:nowrap; opacity:0; transition:opacity .15s;
+    box-shadow:0 3px 0 #b9b19c, 0 6px 14px rgba(0,0,0,.25); transform-origin:50% 100%; }
+  .bubble::after { content:''; position:absolute; left:50%; bottom:-8px; width:14px; height:14px; background:var(--cream); transform:translateX(-50%) rotate(45deg); border-radius:2px; }
+  .bubble.show { opacity:1; }
   /* 第一場比賽的彎道提示 */
   #coach { position:absolute; left:50%; bottom:46%; transform:translateX(-50%) scale(.9); background:var(--cream); color:var(--forest); font-weight:700; padding:10px 24px; border-radius:999px; font-size:19px;
     opacity:0; transition:all .2s; box-shadow:0 4px 0 #b9b19c, 0 8px 20px rgba(0,0,0,.3); white-space:nowrap; letter-spacing:1px; display:flex; align-items:center; gap:8px; }
@@ -320,14 +352,14 @@
   <div class="title-col">
     <div>
       <h1>核果<span>賽車</span></h1>
-      <div class="title-en">NUTS RACING ・ KAOHSIUNG</div>
+      <div class="title-strip"><div class="checker"></div><div class="title-en">NUTS RACING ・ KAOHSIUNG</div></div>
     </div>
     <div class="menu">
       <button class="btn" id="btn-start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>開始比賽</button>
       <button class="btn green" id="btn-garage"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11h1a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-1v1.5a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V19H8v1.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V18H4a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1h1zm2.1 0h9.8l-1-3H8.1l-1 3zM7 16a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm10 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>車庫</button>
       <button class="btn green" id="btn-settings"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3 1a7.7 7.7 0 0 0-1.8-1L15 3.5H9l-.3 2.6a7.7 7.7 0 0 0-1.8 1l-2.3-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-1c.6.4 1.2.8 1.8 1l.3 2.6h6l.3-2.6c.6-.2 1.2-.6 1.8-1l2.3 1 2-3.4-2-1.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>設定</button>
     </div>
-    <a class="link" id="btn-board">排行榜</a>
+    <div class="title-foot"><a class="link" id="btn-board">排行榜</a><span class="pill"><i></i>高雄濃縮賽道・2 圈比時間</span></div>
   </div>
 </div>
 <div id="brand">NUTS INSTITUTE</div>
@@ -364,6 +396,7 @@
   <div class="page-body">
     <div class="srow"><span class="sname">音效</span><span class="sdesc">引擎聲、音樂和提示音</span><div class="seg" id="seg-sound"><button data-v="on">開</button><button data-v="off">關</button></div></div>
     <div class="srow"><span class="sname">畫質</span><span class="sdesc">跑不順就選低：關掉陰影和特效</span><div class="seg" id="seg-quality"><button data-v="high">高</button><button data-v="low">低</button></div></div>
+    <div class="srow"><span class="sname">車手畫面</span><span class="sdesc">右上角的小框：看車手的表情和後面追上來的車。跑不順可以關掉</span><div class="seg" id="seg-face"><button data-v="on">開</button><button data-v="off">關</button></div></div>
     <div class="srow"><span class="sname">時段</span><span class="sdesc">黃昏是橘色的斜陽和長影子</span><div class="seg" id="seg-time"><button data-v="day">白天</button><button data-v="dusk">黃昏</button></div></div>
     <div class="srow"><span class="sname">怎麼玩</span><span class="sdesc">轉彎、油門煞車、漂移，30 秒看完</span><button class="btn ghost" id="btn-howto">重看教學</button></div>
     <div id="mb-sec">
@@ -437,6 +470,8 @@
   <div id="boost-tag">BOOST</div>
   <div id="ctrl-hint"></div>
   <div id="coach"></div>
+  <div id="facecam" class="hide"><span class="fc-tag">車手</span><span class="fc-mood"></span></div>
+  <div id="bubbles"></div>
 </div>
 
 <div id="tutorial" class="hide" data-input="kb">

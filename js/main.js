@@ -8,7 +8,7 @@ import { loadModels, MODELS, cullByDistance, buildChunks, CHUNKS } from './model
 import { buildAtmosphere, setTimeOfDay, ATMOS, PRESETS, sunOnScreen, updateWater } from './atmos.js';
 import { buildTraffic, updateTraffic } from './traffic.js';
 import { ROADS } from './osm_data.js';
-import { KART_COLORS, animateKart, setDriver } from './kart.js';
+import { KART_COLORS, animateKart, animateFace, setDriver } from './kart.js';
 import { CHARACTERS, KARTS, STAT_NAMES, totalStats } from './garage.js';
 import { parseDriver, fitDriver, guessRot, saveDriver, loadSavedDriver, clearSavedDriver } from './driver.js';
 import * as MBit from './microbit.js';
@@ -24,7 +24,7 @@ const ACCEL = 20;
 const BRAKE = 55;
 const DRAG = 9;
 const OFFROAD_MAX = 20;
-const RIVAL_COUNT = 4;
+const RIVAL_COUNT = 7;
 const STEP = 1 / 60;         // 物理固定時步，不同電腦手感一樣
 // 漂移：按住煞車（A／↓）＋轉向＋夠快就甩尾；放開依蓄力給加速
 const DRIFT_MIN_SPEED = MAX_SPEED * 0.42;
@@ -60,8 +60,8 @@ async function stage(pct, text, fn) {
 }
 
 // ---------- 車輛 ----------
-function makeRacer(colorHex, kartDef = KARTS[0]) {
-  const k = kartDef.build(colorHex);
+function makeRacer(colorHex, kartDef = KARTS[0], face = false) {
+  const k = kartDef.build(colorHex, { face });
   scene.add(k.group);
   return {
     kart: k, pos: new THREE.Vector3(), vel: new THREE.Vector3(), heading: 0, speed: 0, prevSpeed: 0,
@@ -85,7 +85,7 @@ function saveGarageSel() { try { localStorage.setItem(GARAGE_KEY, JSON.stringify
 function currentCharacter() { return CHARACTERS.find(c => c.id === sel.character) || CHARACTERS[0]; }
 function currentKart() { return KARTS.find(k => k.id === sel.kart) || KARTS[0]; }
 const rivals = [];
-const rivalPalette = [0x3F8FD6, 0x8E4FC0, 0xE8C21A, 0x2E8B57, 0xF07AA8];
+const RIVALS = [['藍藍', 0x3F8FD6], ['紫紫', 0x8E4FC0], ['黃黃', 0xE8C21A], ['綠綠', 0x2E8B57], ['粉粉', 0xF07AA8], ['青青', 0x1FB7B7], ['白白', 0xF2F2F2], ['棕棕', 0xB5651D]];
 
 function forwardOf(h, out) { return out.set(Math.sin(h), 0, Math.cos(h)); }
 function rightOf(h, out) { return out.set(-Math.cos(h), 0, Math.sin(h)); }
@@ -110,8 +110,8 @@ function resetRace() {
     const idx = 8 + Math.floor(i / 2) * 10;
     const lat = (i % 2 ? 1 : -1) * 3.2;
     placeOnTrack(r, idx, lat);
-    r.u = idx / SAMPLES; r.lat = lat; r.targetLat = lat;
-    r.base = MAX_SPEED * (0.80 + 0.045 * i);
+    r.u = idx / SAMPLES; r.lat = lat; r.targetLat = lat; r.wasAhead = true;
+    r.base = MAX_SPEED * (0.78 + 0.03 * i);   // 7 台：0.78～0.96 倍（難度那批再調）
   });
   for (const n of items.nuts) n.alive = true;
   for (const c of items.cones) { c.hit = 0; c.vel = null; c.rot.set(0, 0, 0); const p = S.p[c.index], r = S.r[c.index]; c.pos.set(p.x + r.x * c.lat, p.y, p.z + r.z * c.lat); }
@@ -215,7 +215,7 @@ function updatePlayer(dt) {
     } else {
       // 放開：依蓄力給加速
       const c = p.driftCharge;
-      if (c >= DRIFT_T2) { p.boost = Math.max(p.boost, 1.4); p.speed = Math.min(BOOST_MAX, p.speed + 10); SFX.boost(); SFX.whoosh(); toast('超級加速！'); showBanner('SUPER BOOST', 'boost'); }
+      if (c >= DRIFT_T2) { p.boost = Math.max(p.boost, 1.4); p.speed = Math.min(BOOST_MAX, p.speed + 10); SFX.boost(); SFX.whoosh(); toast('超級加速！'); showBanner('SUPER BOOST', 'boost'); setMood('happy', 1.2); say(player, '衝啊！'); }
       else if (c >= DRIFT_T1) { p.boost = Math.max(p.boost, 0.7); p.speed = Math.min(BOOST_MAX, p.speed + 5); SFX.boost(); toast('漂移加速！'); }
       p.drift = 0; p.driftCharge = 0;
     }
@@ -258,7 +258,7 @@ function updatePlayer(dt) {
     const vLat = p.vel.x * n.right.x + p.vel.z * n.right.z;
     if (vLat * sgn > 0) { p.vel.x -= n.right.x * vLat; p.vel.z -= n.right.z * vLat; }
     if (p.speed > 14 && !p.wallHit) {
-      p.speed *= 0.6; shake = 0.4; SFX.bump();
+      p.speed *= 0.6; shake = 0.4; SFX.bump(); setMood('ouch', 1.0);
       const want = Math.atan2(n.tangent.x, n.tangent.z);
       let diff = want - p.heading; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       p.heading += diff * 0.5;
@@ -286,7 +286,7 @@ function updatePlayer(dt) {
     p.speed *= (1 - dt * 0.8);
     if (p.pos.y < -8) respawn(p, n.index);
   } else if (!onRoad && !edgeOk) {
-    p.falling = true; p.vy = 0; p.airborne = true; shake = 0.6; SFX.bump(); toast('掉下去了！');
+    p.falling = true; p.vy = 0; p.airborne = true; shake = 0.6; SFX.bump(); toast('掉下去了！'); setMood('ouch', 1.6); say(player, '啊啊啊', 1.6);
     p.drift = 0; p.driftCharge = 0;
   } else if (p.airborne) {
     p.vy -= 30 * dt; p.pos.y += p.vy * dt;
@@ -311,7 +311,7 @@ function updatePlayer(dt) {
     if (nut.pos.distanceToSquared(p.pos) < 2.4 * 2.4) {
       nut.alive = false;
       p.nuts++; p.boost = Math.max(p.boost, 1.1); p.speed = Math.min(BOOST_MAX, p.speed + 6);
-      SFX.nut(); toast('核果 +1');
+      SFX.nut(); toast('核果 +1'); setMood('happy', 0.9); if (Math.random() < 0.25) say(player, pick(['好吃！', '核果！', '再來一顆']));
       for (let i = 0; i < 22; i++) sparkle.emit(nut.pos, tmpV2.set((Math.random() - .5) * 8, 3 + Math.random() * 5, (Math.random() - .5) * 8), 0.6);
     }
   }
@@ -322,7 +322,7 @@ function updatePlayer(dt) {
       c.vel = tmpF.clone().multiplyScalar(p.speed * 0.5).add(new THREE.Vector3((Math.random() - .5) * 6, 9, 0));
       c.spin = (Math.random() - .5) * 10;
       p.speed *= 0.5; p.spin = 0.45; p.boost = 0; shake = 0.5; hitSlow = 0.12; p.drift = 0;
-      SFX.cone(); toast('撞到三角錐！');
+      SFX.cone(); toast('撞到三角錐！'); setMood('ouch', 1.3); say(player, pick(['哎呀', '誰放的！', '啊']));
     }
   }
   for (const pad of items.pads) {
@@ -339,7 +339,7 @@ function updatePlayer(dt) {
       p.pos.add(tmpV2);
       r.lat += (tmpV2.x * -Math.cos(r.heading) + tmpV2.z * Math.sin(r.heading)) * -1.5;
       r.bump = 0.4;
-      if (p.speed > r.speed) { p.speed = Math.max(r.speed * 0.8, p.speed * 0.75); shake = Math.max(shake, 0.25); SFX.bump(); }
+      if (p.speed > r.speed) { p.speed = Math.max(r.speed * 0.8, p.speed * 0.75); shake = Math.max(shake, 0.25); SFX.bump(); setMood('ouch', 0.8); if (Math.random() < 0.5) say(r, pick(['別撞我！', '喂！', '小心一點'])); }
     }
   }
 
@@ -414,6 +414,7 @@ function onLap(p, lapIdx) {
   p.laps.push(t); p.lapStart = raceTime;
   if (p.lap > TOTAL_LAPS) { finishRace(); return; }
   SFX.lap();
+  if (p.lap === TOTAL_LAPS) { setMood('happy', 1.2); say(player, '最後一圈！'); }
   if (prevLapTime > 0) {
     const d = t - prevLapTime;
     showBanner((p.lap === TOTAL_LAPS ? '最後一圈！' : '第 ' + p.lap + ' 圈') + '　' + (d <= 0 ? '比上圈快 ' + Math.abs(d).toFixed(2) + ' 秒' : '比上圈慢 ' + d.toFixed(2) + ' 秒'), d <= 0 ? 'good' : 'bad');
@@ -424,6 +425,13 @@ function onLap(p, lapIdx) {
 function updateRivals(dt) {
   const playerProg = progressOf(player);
   for (const r of rivals) {
+    // 超車與被超：對手會講話
+    const ahead = progressOf(r) > playerProg;
+    if (ahead !== r.wasAhead && gameState === 'race' && raceTime > 2) {
+      if (ahead) say(r, pick(['借過～', '先走囉', '跟上來啊', '太慢了吧']));
+      else say(r, pick(['等等我！', '不會吧', '你太快了', '下次再比']));
+      r.wasAhead = ahead;
+    }
     const myProg = r.lap * SAMPLES + r.u * SAMPLES;
     const gap = (playerProg - myProg) / SAMPLES;
     let target = r.base * (1 + Math.max(-0.08, Math.min(0.12, gap * 0.25)));
@@ -687,6 +695,98 @@ function updateHUD() {
   updateCtrlHint();
 }
 
+// ---------- 車手臉部小畫面 ----------
+// 第二支鏡頭架在車頭、往回拍車手的臉，背景就是你後面的路和追上來的車。
+// 畫到一張小的 render target（每兩幀更新一次），再貼到畫面下方中間那一格
+const FACE_KEY = 'nuts-racing-facecam';
+let faceOn = true;
+try { faceOn = localStorage.getItem(FACE_KEY) !== 'off'; } catch (e) {}
+const faceCam = new THREE.PerspectiveCamera(34, 16 / 9, 0.3, 160);
+const faceRT = new THREE.WebGLRenderTarget(352, 198, { type: THREE.HalfFloatType });
+const blitScene = new THREE.Scene(), blitCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const blitQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: faceRT.texture }));
+blitScene.add(blitQuad);
+const faceEl = document.getElementById('facecam');
+const face = { mood: 'normal', t: 0, glance: 0, tick: 0 };
+function setMood(m, dur) { face.mood = m; face.t = dur; }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+// 心情：撞到、吃到核果這些事件有時效；沒事件時看有沒有在漂移、後面有沒有車貼上來
+function updateFace(dt) {
+  if (face.t > 0) { face.t -= dt; if (face.t <= 0) face.mood = 'normal'; }
+  let glance = 0, worried = false;
+  if (gameState === 'race') {
+    forwardOf(player.heading, tmpF); rightOf(player.heading, tmpR);
+    for (const r of rivals) {
+      tmpV.subVectors(r.pos, player.pos);
+      const back = -tmpV.dot(tmpF), lat = tmpV.dot(tmpR);
+      if (back > 1 && back < 11 && Math.abs(lat) < 7) { worried = true; glance = lat < 0 ? -1 : 1; break; }
+    }
+  }
+  face.glance += (glance - face.glance) * Math.min(1, dt * 4);
+  let mood = face.t > 0 ? face.mood : (player.drift ? 'focus' : (worried ? 'worried' : 'normal'));
+  if (gameState === 'done') mood = computeRank() === 1 ? 'happy' : 'normal';
+  animateFace(player.kart, mood, face.glance, dt);
+  faceEl.dataset.mood = mood;
+}
+function faceVisible() { return faceOn && (gameState === 'countdown' || gameState === 'race') && !tutorialOpen(); }
+function drawFaceCam() {
+  const show = faceVisible();
+  faceEl.classList.toggle('hide', !show);
+  if (!show) return;
+  const r = renderer;
+  face.tick++;
+  if (face.tick % 2 === 0) {
+    forwardOf(player.heading, tmpF);
+    faceCam.position.copy(player.pos).addScaledVector(tmpF, 2.9).addScaledVector(UP, 2.0);
+    camLook.copy(player.pos).addScaledVector(tmpF, -0.45).addScaledVector(UP, 2.05);
+    faceCam.lookAt(camLook);
+    const sm = r.shadowMap.autoUpdate; r.shadowMap.autoUpdate = false;   // 陰影貼圖沿用主畫面那張，不重算
+    r.setRenderTarget(faceRT); r.render(scene, faceCam);
+    r.shadowMap.autoUpdate = sm;
+  }
+  // 貼到畫面：只畫在小框那個區域
+  const rect = faceEl.getBoundingClientRect();
+  const x = rect.left + 4, y = window.innerHeight - rect.bottom + 4, w = rect.width - 8, h = rect.height - 8;
+  r.setRenderTarget(null);
+  r.setViewport(x, y, w, h); r.setScissor(x, y, w, h); r.setScissorTest(true);
+  const ac = r.autoClear; r.autoClear = false;
+  r.render(blitScene, blitCam);
+  r.autoClear = ac; r.setScissorTest(false);
+  const sz = r.getSize(new THREE.Vector2()); r.setViewport(0, 0, sz.x, sz.y);
+}
+
+// ---------- 對話泡泡：車子頭上講話 ----------
+// 每台車一個 div，用主鏡頭把車頭位置投影到畫面上；同一台車 3 秒內只講一句
+const bubbles = [];
+const bubbleBox = document.getElementById('bubbles');
+function bubbleFor(racer) {
+  let b = bubbles.find(x => x.racer === racer);
+  if (!b) { const el = document.createElement('div'); el.className = 'bubble'; bubbleBox.appendChild(el); b = { racer, el, t: 0, cool: 0 }; bubbles.push(b); }
+  return b;
+}
+function say(racer, text, dur = 1.6) {
+  const b = bubbleFor(racer);
+  if (b.cool > 0) return;
+  b.el.textContent = text; b.t = dur; b.cool = 3;
+}
+const _proj = new THREE.Vector3();
+let bubbleLast = performance.now();
+function updateBubbles() {
+  const now = performance.now(), dt = Math.min(0.1, (now - bubbleLast) / 1000); bubbleLast = now;
+  const W = window.innerWidth, H = window.innerHeight;
+  for (const b of bubbles) {
+    if (b.cool > 0) b.cool -= dt;
+    if (b.t <= 0 || gameState === 'title' || gameState === 'done') { b.el.classList.remove('show'); continue; }
+    b.t -= dt;
+    _proj.copy(b.racer.pos); _proj.y += 2.9; _proj.project(camera);
+    const dist = b.racer.pos.distanceTo(camera.position);
+    if (_proj.z > 1 || Math.abs(_proj.x) > 1.1 || Math.abs(_proj.y) > 1.1 || dist > 70) { b.el.classList.remove('show'); continue; }
+    const sc = Math.max(0.55, Math.min(1.1, 12 / dist));
+    b.el.style.transform = 'translate(-50%, -100%) translate(' + ((_proj.x + 1) / 2 * W).toFixed(0) + 'px,' + ((1 - _proj.y) / 2 * H).toFixed(0) + 'px) scale(' + sc.toFixed(2) + ')';
+    b.el.classList.add('show');
+  }
+}
+
 // ---------- 教學提示 ----------
 // 現在用什麼在開車：連著 micro:bit 就是 mb，不然是鍵盤
 function inputKind() { return MBit.MB.connected ? 'mb' : 'kb'; }
@@ -878,7 +978,7 @@ function buildSwatches() {
 function rebuildPlayer() {
   scene.remove(player.kart.group);
   const old = player;
-  player = makeRacer(KART_COLORS[sel.color].hex, currentKart());
+  player = makeRacer(KART_COLORS[sel.color].hex, currentKart(), true);
   player.pos.copy(old.pos); player.heading = old.heading; player.hint = old.hint;
   player.kart.group.position.copy(player.pos); player.kart.group.rotation.y = player.heading;
   applyDriver();
@@ -1030,7 +1130,7 @@ function physicsStep(dt) {
     const n = Math.ceil(countdown);
     if (n !== lastCount) {
       lastCount = n;
-      if (n > 0) { el.count.textContent = n; setLights((4 - n) * 2 - 1, false); SFX.countdown(); }
+      if (n > 0) { el.count.textContent = n; setLights((4 - n) * 2 - 1, false); SFX.countdown(); if (n === 3) { for (const r of rivals.slice().sort(() => Math.random() - .5).slice(0, 2)) say(r, pick(['我一定贏', '看我的', '今天狀態很好', '誰怕誰']), 2.2); } }
       else { el.count.textContent = 'GO!'; setLights(5, true); SFX.go(); }
       el.count.classList.remove('pop'); void el.count.offsetWidth; el.count.classList.add('pop');
     }
@@ -1042,8 +1142,9 @@ function physicsStep(dt) {
     updateRivals(dt);
     updateItems(dt);
     updateCoach();
+    updateFace(dt);
   } else if (gameState === 'done') {
-    updateRivals(dt); updateItems(dt);
+    updateRivals(dt); updateItems(dt); updateFace(dt);
   } else {
     updateItems(dt); MBit.steer(dt);
   }
@@ -1083,6 +1184,8 @@ function frame(now) {
   fxSpeed += (speedTarget - fxSpeed) * Math.min(1, dt * 5);
   sunOnScreen(camera, sunVec);
   fx.render({ boostGlow: player.boost > 0 ? Math.min(1, player.boost) : 0, speed: fxSpeed, time: now / 1000, sun: sunVec, tint: PRESETS[ATMOS.preset].tint });
+  drawFaceCam();
+  updateBubbles();
   requestAnimationFrame(frame);
 }
 let fxSpeed = 0;
@@ -1132,10 +1235,10 @@ async function bootStages() {
   });
   await stage(92, '車子進場', () => {
     loadGarageSel();
-    player = makeRacer(KART_COLORS[sel.color].hex, currentKart());
+    player = makeRacer(KART_COLORS[sel.color].hex, currentKart(), true);
     for (let i = 0; i < RIVAL_COUNT; i++) {
-      const r = makeRacer(rivalPalette[i]);
-      r.u = 0; r.lat = 0; r.targetLat = 0; r.base = 0; r.wobble = Math.random() * 10; r.bump = 0; r.name = ['藍藍', '紫紫', '黃黃', '綠綠', '粉粉'][i];
+      const r = makeRacer(RIVALS[i][1]);
+      r.u = 0; r.lat = 0; r.targetLat = 0; r.base = 0; r.wobble = Math.random() * 10; r.bump = 0; r.name = RIVALS[i][0]; r.wasAhead = true;
       rivals.push(r);
     }
     resetRace(); buildMinimap(); renderGarageUI();
@@ -1178,6 +1281,7 @@ function openSettings() { if (gameState !== 'title' && gameState !== 'done') ret
 document.getElementById('btn-settings-close').addEventListener('click', () => { el.settings.classList.add('hide'); SFX.click(); });
 onSeg('seg-sound', v => { setMuted(v === 'off'); setSeg('seg-sound', v); }); setSeg('seg-sound', isMuted() ? 'off' : 'on');
 onSeg('seg-quality', q => { setQuality(q); dyn.slow = 0; }); setSeg('seg-quality', quality);
+onSeg('seg-face', v => { faceOn = v === 'on'; setSeg('seg-face', v); try { localStorage.setItem(FACE_KEY, v); } catch (e) {} }); setSeg('seg-face', faceOn ? 'on' : 'off');
 document.getElementById('btn-howto').addEventListener('click', () => openTutorial('review'));
 // micro:bit 區塊：預設收合，點標題展開
 function setMbOpen(open) { el.mbSec.classList.toggle('open', open); }
@@ -1214,6 +1318,6 @@ if (loadEl.tip) loadEl.tip.textContent = '小提示：' + TIPS[Math.floor(Math.r
 boot();
 
 // 除錯口（測試用）：window.__game
-window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, sel, selectCharacter, rebuildPlayer, CHARACTERS, KARTS, openSettings, openStartDialog, openBoard, openTutorial, setMbOpen, setDifficulty, coach, coachReset, get cornerList() { return cornerList; }, get difficulty() { return difficulty; }, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
+window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, sel, selectCharacter, rebuildPlayer, CHARACTERS, KARTS, openSettings, openStartDialog, openBoard, openTutorial, setMbOpen, setDifficulty, setMood, say, face, drawFaceCam, updateFace, updateBubbles, coach, coachReset, get cornerList() { return cornerList; }, get difficulty() { return difficulty; }, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
   // 量 draw call：renderer.info 每次 render 會歸零，後製最後一道只有 1 個 call，所以只量場景那一道
   measure() { const r = renderer; r.info.autoReset = false; r.info.reset(); r.setRenderTarget(fx.enabled ? fx.rt : null); r.render(scene, camera); const o = { calls: r.info.render.calls, triangles: r.info.render.triangles, pixelRatio: r.getPixelRatio() }; r.info.autoReset = true; r.setRenderTarget(null); return o; } };

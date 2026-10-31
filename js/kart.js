@@ -57,7 +57,8 @@ function mergeParts(meshes, matOpts) {
   return out;
 }
 
-export function buildKart(colorHex) {
+// face=true 才做表情零件（眉毛、嘴巴、汗滴），只有玩家的車需要，對手不用多花 draw call
+export function buildKart(colorHex, { face = false } = {}) {
   const body = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.45, metalness: 0.15 });
   const bodyDark = new THREE.MeshStandardMaterial({ color: new THREE.Color(colorHex).multiplyScalar(0.7), roughness: 0.6 });
   const g = new THREE.Group();
@@ -146,6 +147,21 @@ export function buildKart(colorHex) {
   }
   tail.add(mergeParts(tailParts, { roughness: 0.85 }));
   sq.add(tail);
+  // 表情零件：兩條眉毛、笑嘴、O 形嘴、汗滴。臉部小畫面從車頭往回拍，看得到這些在動
+  let faceParts = null;
+  if (face) {
+    const browMat = new THREE.MeshStandardMaterial({ color: 0x4A2A0C, roughness: 0.9 });
+    const browL = mesh(new THREE.BoxGeometry(0.16, 0.035, 0.03), browMat, -0.17, 1.44, 0.40);
+    const browR = mesh(new THREE.BoxGeometry(0.16, 0.035, 0.03), browMat, 0.17, 1.44, 0.40);
+    const smile = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.022, 6, 12, Math.PI), new THREE.MeshStandardMaterial({ color: 0x5A2A1E, roughness: 0.8 }));
+    smile.position.set(0, 0.98, 0.52); smile.rotation.z = Math.PI;   // 開口朝上 = 微笑
+    const mouthO = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshStandardMaterial({ color: 0x3A1A10, roughness: 0.9 }));
+    mouthO.position.set(0, 0.96, 0.54); mouthO.visible = false;
+    const sweat = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshStandardMaterial({ color: 0x59C8FF, roughness: 0.3 }));
+    sweat.position.set(0.42, 1.35, 0.25); sweat.scale.set(0.8, 1.3, 0.8); sweat.visible = false;
+    [browL, browR, smile, mouthO, sweat].forEach(m => { m.castShadow = false; m.receiveShadow = false; sq.add(m); });
+    faceParts = { browL, browR, smile, mouthO, sweat };
+  }
   g.add(sq);
 
   // 車底柔影（接觸陰影）：讓車子貼在地上，不會像浮著
@@ -158,7 +174,7 @@ export function buildKart(colorHex) {
   driver.position.copy(sq.position);
   g.add(driver);
 
-  return { group: g, wheels, front, squirrel: sq, tail, driver, lightMat, brakeGlow, blob, color: new THREE.Color(colorHex),
+  return { group: g, wheels, front, squirrel: sq, tail, driver, lightMat, brakeGlow, blob, color: new THREE.Color(colorHex), face: faceParts,
     rearWheels: [new THREE.Vector3(-1.2, 0, -1.2), new THREE.Vector3(1.2, 0, -1.2)] };
 }
 
@@ -181,4 +197,29 @@ export function animateKart(k, speed, steer, dt, t, braking = false) {
   k.squirrel.rotation.z = steer * 0.18;
   if (k.driver) k.driver.rotation.z = steer * 0.18;
   k.tail.rotation.x = Math.sin(t * 9) * 0.12 * (0.3 + Math.min(1, Math.abs(speed) / 20));
+}
+
+// 表情：mood 是 normal／happy／ouch／focus／worried，glance 是回頭看的方向（-1 左、1 右、0 正前）
+// 只動眉毛的高度與角度、嘴巴的大小、汗滴的顯示；松鼠整隻轉身代表回頭看
+const MOODS = {
+  normal:  { browY: 0, browTilt: 0,     smile: 1.0, o: false, sweat: false },
+  happy:   { browY: 0.04, browTilt: 0,  smile: 1.6, o: false, sweat: false },
+  ouch:    { browY: 0.03, browTilt: 0.5, smile: 0,  o: true,  sweat: true },
+  focus:   { browY: -0.03, browTilt: -0.45, smile: 0.35, o: false, sweat: false },
+  worried: { browY: 0.03, browTilt: 0.4, smile: 0.5, o: false, sweat: true }
+};
+export function animateFace(k, mood, glance, dt) {
+  const f = k.face; if (!f) return;
+  const m = MOODS[mood] || MOODS.normal;
+  const a = Math.min(1, dt * 10);
+  f.browL.position.y += (1.44 + m.browY - f.browL.position.y) * a;
+  f.browR.position.y = f.browL.position.y;
+  f.browL.rotation.z += (m.browTilt - f.browL.rotation.z) * a;    // 正：內側往上（委屈）；負：內側往下（認真）
+  f.browR.rotation.z = -f.browL.rotation.z;
+  const sc = Math.max(0.01, m.smile);
+  f.smile.scale.x += (sc - f.smile.scale.x) * a; f.smile.scale.y += (sc - f.smile.scale.y) * a;
+  f.smile.visible = m.smile > 0.05;
+  f.mouthO.visible = m.o; f.sweat.visible = m.sweat;
+  if (m.sweat) f.sweat.position.y = 1.35 - (performance.now() % 700) / 700 * 0.12;   // 汗滴慢慢往下滑
+  k.squirrel.rotation.y += (glance * 0.8 - k.squirrel.rotation.y) * Math.min(1, dt * 6);   // 回頭看，但臉還看得到一半
 }

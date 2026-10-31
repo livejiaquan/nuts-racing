@@ -1,7 +1,7 @@
 // 車庫資料：角色與車款。下一批要加角色或車款，只要在陣列裡加一筆，介面會自己長出來。
 // 每筆：id（存在 localStorage 用）、name、desc（一句介紹）、icon（車庫格子裡的小圖，SVG 字串）、
 //       stats（五項 1～5：speed 極速、accel 加速、handling 操控、offroad 越野、weight 重量；角色寫的是加減值）、
-//       build（角色：回傳坐在駕駛座的 Object3D，回 null 就用卡丁車內建的松鼠；車款：回傳 buildKart 那種 {group, wheels, …}）
+//       build（角色：回傳坐在駕駛座的 Object3D，回 null 就用卡丁車內建的松鼠；車款：build(colorHex, opts) 回傳 buildKart 那種 {group, wheels, …}）
 import { buildKart } from './kart.js';
 
 export const STAT_NAMES = [['speed', '極速'], ['accel', '加速'], ['handling', '操控'], ['offroad', '越野'], ['weight', '重量']];
@@ -28,7 +28,7 @@ export const KARTS = [
     id: 'kart', name: '卡丁', desc: '什麼都行的基本款。',
     icon: '<svg viewBox="0 0 48 48"><rect x="13" y="6" width="22" height="36" rx="6" fill="#E8743B"/><rect x="18" y="18" width="12" height="12" rx="3" fill="#143D22"/><rect x="8" y="9" width="6" height="10" rx="2" fill="#1B1B1B"/><rect x="34" y="9" width="6" height="10" rx="2" fill="#1B1B1B"/><rect x="8" y="29" width="6" height="10" rx="2" fill="#1B1B1B"/><rect x="34" y="29" width="6" height="10" rx="2" fill="#1B1B1B"/></svg>',
     stats: { speed: 3, accel: 3, handling: 3, offroad: 3, weight: 3 },
-    build: (colorHex) => buildKart(colorHex)
+    build: (colorHex, opts) => buildKart(colorHex, opts)   // opts.face：玩家的車要表情零件
   }
 ];
 
