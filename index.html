@@ -81,10 +81,21 @@
   #color-name { font-size:14px; opacity:.9; min-width:64px; }
   #driver-row { flex-wrap:wrap; }
   #driver-row .btn.ghost { font-size:13px; padding:6px 12px; }
-  #driver-tools { display:inline-flex; align-items:center; gap:6px; }
-  #driver-tools[hidden] { display:none; }
   #driver-color { width:34px; height:30px; border:2px solid rgba(253,246,227,.45); border-radius:8px; background:none; padding:2px; cursor:pointer; }
   #driver-name { flex-basis:100%; }
+  /* 車庫：鏡頭拉到自己的車旁邊，標題卡片淡出，左下角一小列工具 */
+  #title.garage { background:none; pointer-events:none; }   /* 讓滑鼠拖得到底下的畫布 */
+  #title.garage .title-col { opacity:0; pointer-events:none; transition:opacity .3s; }
+  #garage { position:fixed; left:6vw; bottom:56px; z-index:12; display:flex; flex-direction:column; gap:10px; padding:14px 18px; animation:fadeUp .4s cubic-bezier(.2,1,.3,1) both; }
+  #garage[hidden] { display:none; }
+  .garage-head { font-weight:700; font-size:16px; }
+  .garage-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .garage-row .btn.ghost { font-size:13px; padding:6px 12px; }
+  .garage-row .btn:not(.ghost) { font-size:15px; padding:8px 20px; }
+  .garage-size { display:inline-flex; align-items:center; gap:6px; font-size:13px; }
+  .garage-size input { width:110px; accent-color:var(--orange); }
+  .garage-size span { font-family:var(--num-font); min-width:42px; }
+  #garage-tools[hidden] { display:none; }
   .start-row { display:flex; align-items:center; gap:16px; margin-top:4px; }
   .link { color:var(--gold); font-weight:700; text-decoration:none; border-bottom:1.5px dashed rgba(242,183,5,.6); font-size:14px; }
   .link:hover { border-bottom-style:solid; }
@@ -236,12 +247,7 @@
       <div class="field" id="driver-row"><span class="label">駕駛</span>
         <button class="btn ghost" id="btn-driver">上傳我的角色</button>
         <input type="file" id="driver-file" accept=".obj,.stl,.glb,.gltf" hidden>
-        <span id="driver-tools" hidden>
-          <input type="color" id="driver-color" value="#D98A41" title="模型沒有自帶顏色時用這個顏色">
-          <button class="btn ghost" id="btn-driver-flip" title="模型躺著的話按這個">翻</button>
-          <button class="btn ghost" id="btn-driver-turn" title="轉 90 度">轉</button>
-          <button class="btn ghost" id="btn-driver-clear">用回松鼠</button>
-        </span>
+        <button class="btn ghost" id="btn-garage">看車子</button>
         <span id="driver-name" class="tiny">預設是松鼠。可以放自己做的 .obj／.stl／.glb</span>
       </div>
       <div class="start-row">
@@ -257,6 +263,20 @@
       <b>鍵盤</b>　<kbd>↑</kbd> 油門　<kbd>↓</kbd> 煞車　<kbd>←</kbd><kbd>→</kbd> 轉彎　<kbd>Enter</kbd> 開始<br>
       <b>micro:bit</b>　左右傾斜轉彎　<kbd>B</kbd> 油門（右手）　<kbd>A</kbd> 煞車（左手）　按住煞車進彎＝漂移
     </div>
+  </div>
+</div>
+<div id="garage" class="card" hidden>
+  <div class="garage-head">看車子　<span class="tiny">拖曳畫面可以轉</span></div>
+  <div class="garage-row" id="garage-tools">
+    <input type="color" id="driver-color" value="#D98A41" title="模型沒有自帶顏色時用這個顏色">
+    <button class="btn ghost" id="btn-driver-flip" title="模型躺著的話按這個">翻</button>
+    <button class="btn ghost" id="btn-driver-turn" title="轉 90 度">轉</button>
+    <label class="garage-size">大小 <input type="range" id="driver-size" min="50" max="150" step="5" value="100"><span id="driver-size-val">100%</span></label>
+    <button class="btn ghost" id="btn-driver-clear">用回松鼠</button>
+  </div>
+  <div class="garage-row">
+    <button class="btn ghost" id="btn-driver-2">換一個檔</button>
+    <button class="btn" id="btn-garage-done">好了</button>
   </div>
 </div>
 <div id="brand">NUTS INSTITUTE</div>
