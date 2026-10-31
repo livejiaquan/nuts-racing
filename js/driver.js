@@ -31,8 +31,16 @@ export async function parseDriver(name, buffer, colorHex) {
     inner = gltf.scene;
     inner.traverse(o => {
       if (!o.isMesh) return;
+      if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();   // 沒法線會變黑
       const ms = Array.isArray(o.material) ? o.material : [o.material];
-      ms.forEach(m => { if (m.map) m.map.colorSpace = THREE.SRGBColorSpace; });
+      ms.forEach(m => {
+        if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
+        // glTF 沒寫 metallicFactor 時預設是 1（全金屬），場景裡沒有環境貼圖就會變成灰黑一片、看不到顏色。
+        // 沒有金屬貼圖的一律壓回非金屬，顏色才會像 Tinkercad 裡看到的那樣
+        if ('metalness' in m && !m.metalnessMap) m.metalness = Math.min(m.metalness, 0.1);
+        if ('roughness' in m && !m.roughnessMap) m.roughness = Math.max(0.5, Math.min(m.roughness, 0.9));
+        m.needsUpdate = true;
+      });
     });
   } else {
     throw new Error('只支援 .obj、.stl、.glb 檔');
