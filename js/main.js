@@ -1,7 +1,7 @@
 // 核果賽車 3D — 主程式
 import * as THREE from 'three';
 import { PALETTE, createRenderer, createScene, addSky, addClouds, addLights, followShadow, addGround, addMountains, addTrees } from './world.js';
-import { ROAD_HALF, SAMPLES, buildCurve, sampleCurve, nearest, buildRoad, buildGate, placeItems, syncItems, buildCornerGear, buildBridges } from './track.js';
+import { ROAD_HALF, SAMPLES, buildCurve, sampleCurve, nearest, buildRoad, buildGate, placeItems, syncItems, buildCornerGear, buildBridges, findCorners } from './track.js';
 import { buildKaohsiung } from './kaohsiung.js';
 import { buildCityRoads, buildBuildings, buildStreetFurniture, buildLandmarks, buildCrosswalks, parkTreeSpots, buildParkedCars, buildParkTrees, CITY_RUNS } from './city.js';
 import { loadModels, MODELS, cullByDistance, buildChunks, CHUNKS } from './models.js';
@@ -546,7 +546,8 @@ const el = {
   tilt: document.getElementById('tilt-needle'), street: document.getElementById('hud-street'), colorName: document.getElementById('color-name'), swatches: document.getElementById('swatches'),
   tutorial: document.getElementById('tutorial'), startDlg: document.getElementById('start-dlg'), startTitle: document.getElementById('start-title'), nameInput: document.getElementById('player-name'),
   settings: document.getElementById('settings'), board: document.getElementById('board-drawer'), mbChip: document.getElementById('mb-chip'), mbChipTilt: document.getElementById('mb-chip-tilt'),
-  mbSec: document.getElementById('mb-sec'), mbSecDesc: document.getElementById('mb-sec-desc'), gear: document.getElementById('btn-gear')
+  mbSec: document.getElementById('mb-sec'), mbSecDesc: document.getElementById('mb-sec-desc'), gear: document.getElementById('btn-gear'),
+  ctrlHint: document.getElementById('ctrl-hint'), coach: document.getElementById('coach'), tutGo: document.getElementById('tut-go'), tutSkip: document.getElementById('tut-skip')
 };
 const gctx = el.gauge.getContext('2d');
 const mctx = el.minimap.getContext('2d');
@@ -674,7 +675,47 @@ function updateHUD() {
   const live = MBit.MB.connected && performance.now() - MBit.MB.lastData < 700;
   el.mbChip.classList.toggle('hide', !live);
   if (live) el.mbChipTilt.textContent = String(Math.round(MBit.MB.rawRoll - MBit.MB.zero));
+  updateCtrlHint();
 }
+
+// ---------- 教學提示 ----------
+// 現在用什麼在開車：連著 micro:bit 就是 mb，不然是鍵盤
+function inputKind() { return MBit.MB.connected ? 'mb' : 'kb'; }
+const CTRL_HINT = {
+  kb: '<kbd>↑</kbd> 油門<span class="sep">｜</span><kbd>↓</kbd> 煞車<span class="sep">｜</span><kbd>←</kbd><kbd>→</kbd> 轉彎<span class="sep">｜</span>按住 <kbd>↓</kbd> 再轉 = 漂移',
+  mb: '左右傾斜 轉彎<span class="sep">｜</span><span class="mbk b">B</span> 油門<span class="sep">｜</span><span class="mbk a">A</span> 煞車<span class="sep">｜</span>按住 <span class="mbk a">A</span> 再傾斜 = 漂移'
+};
+let ctrlHintKind = '';
+// 倒數 3、2、1 時畫面下方浮一條操作提示，起跑後 2 秒收掉；鍵盤或 micro:bit 版本看當下有沒有連
+function updateCtrlHint() {
+  const show = gameState === 'countdown' || (gameState === 'race' && raceTime < 2);
+  if (show) { const k = inputKind(); if (k !== ctrlHintKind) { ctrlHintKind = k; el.ctrlHint.innerHTML = CTRL_HINT[k]; } }
+  el.ctrlHint.classList.toggle('show', show);
+}
+// 第一場比賽：前兩個彎道前跳「這裡按住 ↓ 試試漂移」，兩個都跳過就記在這台電腦，之後不再出現（設定裡重看教學會再開）
+const COACH_KEY = 'nuts-racing-coach-v1';
+const COACH_LEAD = 70;   // 彎道前幾個取樣開始提示（約 100 公尺，全速大概 2 秒）
+let cornerList = [];
+const coach = { on: false, next: 0, timer: null };
+function coachStart() {
+  let seen = false;
+  try { seen = !!localStorage.getItem(COACH_KEY); } catch (e) {}
+  coach.on = !seen; coach.next = 0;
+}
+function updateCoach() {
+  if (!coach.on || coach.next >= 2 || !cornerList.length) return;
+  const c = cornerList[coach.next];
+  const d = (c.start - player.hint + SAMPLES) % SAMPLES;
+  if (d > COACH_LEAD) return;
+  const left = c.dir > 0;
+  const kb = inputKind() === 'kb';
+  el.coach.innerHTML = '前面' + (left ? '左' : '右') + '彎：按住 ' + (kb ? '<kbd>↓</kbd> 再按 <kbd>' + (left ? '←' : '→') + '</kbd>' : '<span class="mbk">A</span> 再往' + (left ? '左' : '右') + '傾斜') + ' 試試漂移';
+  el.coach.classList.add('show');
+  clearTimeout(coach.timer); coach.timer = setTimeout(() => el.coach.classList.remove('show'), 3200);
+  coach.next++;
+  if (coach.next >= 2) { coach.on = false; try { localStorage.setItem(COACH_KEY, '1'); } catch (e) {} }
+}
+function coachReset() { try { localStorage.removeItem(COACH_KEY); } catch (e) {} }
 // 設定頁 micro:bit 區塊的狀態文字、按鈕字樣、傾斜指針
 function updateMbUI() {
   el.mbState.textContent = MBit.MB.status;
@@ -732,7 +773,14 @@ function confirmStart() {
 const TUT_KEY = 'nuts-racing-tutorial-v1';
 let tutorialMode = 'start';   // start：看完就開賽；review：從設定重看，看完回到原來的畫面
 function tutorialOpen() { return !el.tutorial.classList.contains('hide'); }
-function openTutorial(mode) { tutorialMode = mode; el.tutorial.classList.remove('hide'); SFX.click(); }
+function openTutorial(mode) {
+  tutorialMode = mode;
+  el.tutorial.dataset.input = inputKind();
+  el.tutGo.textContent = mode === 'start' ? '知道了，開始！' : '知道了';
+  el.tutSkip.classList.toggle('hide', mode !== 'start');
+  if (mode === 'review') coachReset();   // 重看教學的人，下一場的彎道提示也再跳一次
+  el.tutorial.classList.remove('hide'); SFX.click();
+}
 function requestStart() {
   let seen = false;
   try { seen = !!localStorage.getItem(TUT_KEY); } catch (e) {}
@@ -749,6 +797,7 @@ function startRace() {
   exitGarage(); closeOverlays();
   resetRace();
   gameState = 'countdown'; lastCount = 4;
+  coachStart(); el.coach.classList.remove('show');
   el.title.classList.add('hide'); el.result.classList.add('hide');
   el.hud.classList.remove('hide');
   setLights(0, false);
@@ -953,6 +1002,7 @@ function physicsStep(dt) {
     updatePlayer(dt);
     updateRivals(dt);
     updateItems(dt);
+    updateCoach();
   } else if (gameState === 'done') {
     updateRivals(dt); updateItems(dt);
   } else {
@@ -1036,6 +1086,7 @@ async function bootStages() {
   await stage(76, '85 大樓、港口、愛河', () => { buildKaohsiung(scene, S); landmarks = buildLandmarks(scene, S); const spots = parkTreeSpots(S); if (!buildParkTrees(scene, spots)) addTrees(scene, spots);  buildChunks(scene); for (const c of CHUNKS) ATMOS.occluders.push(c); });
   await stage(84, '放核果與道具', () => {
     items = placeItems(S, scene);
+    cornerList = findCorners(S).corners.filter(c => c.start > COACH_LEAD + 10);
     flame = new Particles(140, 0xFFB347, 0.9); dust = new Particles(160, 0xC9B98A, 1.1); sparkle = new Particles(80, 0xFFF1A8, 0.7); smoke = new Particles(160, 0xE8E6E0, 1.6);
     sparkB = new Particles(160, 0x59C8FF, 0.55, true); sparkO = new Particles(160, 0xFFB043, 0.6, true);
     skid = new SkidMarks(scene);
@@ -1123,6 +1174,6 @@ if (loadEl.tip) loadEl.tip.textContent = '小提示：' + TIPS[Math.floor(Math.r
 boot();
 
 // 除錯口（測試用）：window.__game
-window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, openSettings, openStartDialog, openBoard, openTutorial, setMbOpen, setDifficulty, get difficulty() { return difficulty; }, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
+window.__game = { audioState, driver, useDriver, clearDriver, garage, enterGarage, exitGarage, openSettings, openStartDialog, openBoard, openTutorial, setMbOpen, setDifficulty, coach, coachReset, get cornerList() { return cornerList; }, get difficulty() { return difficulty; }, dyn, applyPixelRatio, updateDynamicRes, applyTimeOfDay, ATMOS, get player() { return player; }, keys, get S() { return S; }, rivals, get items() { return items; }, get state() { return gameState; }, get time() { return raceTime; }, computeRank, nearest, startRace, setQuality, get fx() { return fx; }, step(n = 1) { for (let i = 0; i < n; i++) physicsStep(STEP); }, render() { updateCamera(STEP); syncItems(items, camera.quaternion, camera.position); cullByDistance(camera.position); updateHUD(); fx.render(0); },
   // 量 draw call：renderer.info 每次 render 會歸零，後製最後一道只有 1 個 call，所以只量場景那一道
   measure() { const r = renderer; r.info.autoReset = false; r.info.reset(); r.setRenderTarget(fx.enabled ? fx.rt : null); r.render(scene, camera); const o = { calls: r.info.render.calls, triangles: r.info.render.triangles, pixelRatio: r.getPixelRatio() }; r.info.autoReset = true; r.setRenderTarget(null); return o; } };
