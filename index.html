@@ -203,6 +203,7 @@
   .stat-row b { font-family:var(--num-font); color:var(--gold); font-weight:400; min-width:14px; text-align:right; }
   #g-pick { font-size:15px; line-height:1.5; }
   #g-pick b { color:var(--gold); }
+  #g-pick .wc { display:inline-block; margin-left:8px; font-size:11px; background:rgba(253,246,227,.15); border-radius:999px; padding:1px 8px; vertical-align:2px; }
   @media (max-height: 640px) { .gtile i { width:52px; height:52px; } .gtile { width:62px; } .grow { padding:8px 10px; gap:6px; } .garage-cols { padding-bottom:10px; } #garage .page-head { padding:10px 24px 6px; } #garage .page-head h2 { font-size:24px; } }
 
   /* ---------- HUD ---------- */
@@ -463,7 +464,6 @@
     <div class="gcol left">
       <div class="grow"><div class="label">角色</div><div class="gtiles" id="g-chars"></div></div>
       <div class="grow"><div class="label">車款</div><div class="gtiles" id="g-karts"></div></div>
-      <div class="grow"><div class="label">顏色</div><div class="garage-row"><div id="swatches"></div><span id="color-name"></span></div></div>
       <div class="grow" id="g-upload" hidden>
         <div class="label">我的角色</div>
         <div class="garage-row"><button class="btn ghost" id="btn-driver">選檔案</button><input type="file" id="driver-file" accept=".obj,.stl,.glb,.gltf" hidden><span id="driver-name">可以放自己做的 .obj／.stl／.glb</span></div>
@@ -477,6 +477,7 @@
       </div>
     </div>
     <div class="gcol right">
+      <div class="grow"><div class="label">顏色</div><div class="garage-row"><div id="swatches"></div><span id="color-name"></span></div></div>
       <div class="grow"><div class="label">數值</div><div id="g-stats"></div></div>
       <div class="grow" id="g-pick"></div>
     </div>
